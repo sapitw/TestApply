@@ -1,8 +1,11 @@
 """
 FastAPI REST API routes for Feishu Knowledge Graph system.
 """
+import asyncio
 import json
+import uuid
 from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 from loguru import logger
@@ -11,6 +14,11 @@ from backend.feishu.client import feishu_client
 from backend.feishu.parser import document_parser
 from backend.graph.builder import graph_builder
 from backend.graph.models import KnowledgeGraph
+from backend.feishu.scanner import (
+    deep_scanner, ScanJob, ScanEvent,
+    get_scan_jobs, get_scan_job, get_tracker,
+    _scan_jobs,
+)
 from backend.mcp.server import (
     tool_index_feishu_document,
     tool_get_graph_overview,
@@ -210,3 +218,228 @@ async def mcp_call(req: MCPToolRequest):
         return {"result": json.loads(result)}
     except (json.JSONDecodeError, TypeError):
         return {"result": result}
+
+
+# ─── Deep Scan routes ─────────────────────────────────────────────────────────
+
+class ScanRequest(BaseModel):
+    url: str                        # Feishu root URL or raw token
+    root_type: str = "auto"         # "folder" | "wiki_space" | "auto"
+    clear_visited: bool = False     # Reset visited tracker before this scan
+
+
+@router.post("/scan")
+async def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
+    """
+    Start a deep recursive scan from a Feishu root path.
+    Returns a job_id immediately; use /scan/{job_id}/events for SSE progress.
+    """
+    job_id = str(uuid.uuid4())
+
+    # Determine root type from URL if "auto"
+    root_type = req.root_type
+    root_token = req.url
+    if req.url.startswith("http"):
+        try:
+            info = feishu_client.parse_feishu_url(req.url)
+            root_token = info["token"]
+            if root_type == "auto":
+                root_type = info["type"]
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Cannot parse URL: {e}")
+    elif root_type == "auto":
+        root_type = "folder"  # default assumption for raw tokens
+
+    if req.clear_visited:
+        get_tracker().clear()
+
+    job = ScanJob(
+        id=job_id,
+        root_token=root_token,
+        root_type=root_type,
+    )
+    _scan_jobs[job_id] = job
+
+    # Event queue for streaming
+    event_queue: asyncio.Queue[ScanEvent] = asyncio.Queue()
+
+    def on_event(ev: ScanEvent):
+        try:
+            event_queue.put_nowait(ev)
+        except asyncio.QueueFull:
+            pass
+
+    async def run_scan():
+        try:
+            kg = await deep_scanner.scan(req.url, job, on_event=on_event)
+            # Store the merged graph
+            from backend.mcp.server import store_graph
+            store_graph(kg)
+            job.graph_id = kg.id
+        except Exception as e:
+            job.status = "error"
+            job.error = str(e)
+            logger.exception(f"Scan job {job_id} failed")
+        finally:
+            # Signal stream end
+            await event_queue.put(None)
+
+    background_tasks.add_task(run_scan)
+
+    # Store event queue on job for SSE endpoint
+    _scan_event_queues[job_id] = event_queue
+
+    return {
+        "job_id": job_id,
+        "root_token": root_token,
+        "root_type": root_type,
+        "status": "started",
+        "sse_url": f"/api/scan/{job_id}/events",
+    }
+
+
+# { job_id: asyncio.Queue }
+_scan_event_queues: dict[str, asyncio.Queue] = {}
+
+
+@router.get("/scan/{job_id}/events")
+async def scan_events(job_id: str):
+    """
+    SSE stream for scan progress.
+    Connect to this endpoint to receive real-time scan events.
+
+    Event types:
+    - start    : scan started
+    - found    : a document was discovered
+    - skip     : document already visited, skipped
+    - indexed  : document successfully indexed
+    - error    : error processing a document
+    - done     : scan complete (stream ends)
+    """
+    job = get_scan_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Scan job {job_id} not found")
+
+    queue = _scan_event_queues.get(job_id)
+
+    async def event_generator():
+        # First, replay already-emitted events
+        for ev in job.events:
+            yield ev.to_sse()
+
+        if job.status in ("done", "error"):
+            # Job already finished, just close
+            return
+
+        # Stream new events
+        if queue:
+            while True:
+                try:
+                    ev = await asyncio.wait_for(queue.get(), timeout=60.0)
+                    if ev is None:
+                        break
+                    yield ev.to_sse()
+                    if ev.type == "done":
+                        break
+                except asyncio.TimeoutError:
+                    # Keep-alive ping
+                    yield ": ping\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.get("/scan/{job_id}")
+async def get_scan_status(job_id: str):
+    """Get the current status of a scan job."""
+    job = get_scan_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Scan job {job_id} not found")
+    return {
+        "job_id": job.id,
+        "status": job.status,
+        "root_token": job.root_token,
+        "root_type": job.root_type,
+        "graph_id": job.graph_id,
+        "total_found": job.total_found,
+        "total_indexed": job.total_indexed,
+        "total_skipped": job.total_skipped,
+        "error": job.error,
+        "started_at": job.started_at,
+        "finished_at": job.finished_at,
+    }
+
+
+@router.get("/scan")
+async def list_scans():
+    """List all scan jobs."""
+    jobs = get_scan_jobs()
+    return {
+        "jobs": [
+            {
+                "job_id": j.id,
+                "status": j.status,
+                "root_token": j.root_token,
+                "root_type": j.root_type,
+                "graph_id": j.graph_id,
+                "total_found": j.total_found,
+                "total_indexed": j.total_indexed,
+                "total_skipped": j.total_skipped,
+                "started_at": j.started_at,
+                "finished_at": j.finished_at,
+            }
+            for j in jobs.values()
+        ],
+        "total": len(jobs),
+    }
+
+
+@router.delete("/scan/{job_id}")
+async def delete_scan_job(job_id: str):
+    """Remove a scan job from memory."""
+    if job_id not in _scan_jobs:
+        raise HTTPException(status_code=404, detail="Scan job not found")
+    del _scan_jobs[job_id]
+    _scan_event_queues.pop(job_id, None)
+    return {"message": f"Scan job {job_id} deleted"}
+
+
+# ─── Visited tracker routes ───────────────────────────────────────────────────
+
+@router.get("/visited")
+async def get_visited():
+    """List all visited (already-scanned) page tokens."""
+    tracker = get_tracker()
+    return {
+        "count": tracker.count,
+        "visited": tracker.all_visited(),
+    }
+
+
+@router.delete("/visited")
+async def clear_visited():
+    """Clear the visited tracker — next scan will re-index all pages."""
+    get_tracker().clear()
+    return {"message": "Visited tracker cleared."}
+
+
+@router.delete("/visited/{token}")
+async def remove_visited(token: str):
+    """Remove a specific token from the visited tracker so it gets re-scanned."""
+    tracker = get_tracker()
+    if not tracker.has_visited(token):
+        raise HTTPException(status_code=404, detail=f"Token {token} not in visited set")
+    # Remove by clearing and re-adding all except the target
+    all_v = tracker.all_visited()
+    tracker.clear()
+    for t, info in all_v.items():
+        if t != token:
+            tracker.mark_visited(t, info["title"], info["type"])
+    return {"message": f"Token {token} removed from visited set."}

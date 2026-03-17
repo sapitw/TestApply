@@ -14,6 +14,7 @@ Usage:
 """
 import json
 import asyncio
+import uuid
 from typing import Any
 from loguru import logger
 
@@ -38,6 +39,48 @@ _graph_store: dict[str, KnowledgeGraph] = {}
 # ─── Tool Definitions ──────────────────────────────────────────────────────────
 
 TOOLS = [
+    {
+        "name": "scan_feishu_root",
+        "description": (
+            "Deep recursive scan of an entire Feishu root path (folder or wiki space). "
+            "Automatically traverses ALL layers, indexes every document, and builds a "
+            "merged knowledge graph. Already-scanned pages are skipped automatically. "
+            "Returns graph_id when complete. Use this instead of index_feishu_document "
+            "when you want to index an entire knowledge base."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": (
+                        "Feishu root URL or token. "
+                        "Examples: https://xxx.feishu.cn/wiki/SPACE_TOKEN  "
+                        "or  https://xxx.feishu.cn/drive/folder/FOLDER_TOKEN"
+                    ),
+                },
+                "clear_visited": {
+                    "type": "boolean",
+                    "description": "If true, clears the visited cache so all pages are re-scanned.",
+                    "default": False,
+                },
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "get_visited_pages",
+        "description": (
+            "List all Feishu pages that have already been scanned and cached. "
+            "Use this to see what is already indexed before running a new scan."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "clear_visited_cache",
+        "description": "Clear the visited page cache so the next scan re-indexes all pages.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
     {
         "name": "index_feishu_document",
         "description": (
@@ -199,6 +242,69 @@ TOOLS = [
 
 
 # ─── Tool Implementations ──────────────────────────────────────────────────────
+
+async def tool_scan_feishu_root(url: str, clear_visited: bool = False) -> str:
+    """Deep recursive scan of entire Feishu root — all layers, skip already-visited."""
+    from backend.feishu.scanner import deep_scanner, ScanJob, get_tracker, _scan_jobs
+
+    if clear_visited:
+        get_tracker().clear()
+
+    job_id = str(uuid.uuid4())
+    job = ScanJob(id=job_id, root_token=url, root_type="auto")
+    _scan_jobs[job_id] = job
+
+    progress_lines: list[str] = []
+
+    def on_event(ev):
+        line = f"[{ev.type.upper()}] {ev.doc_type} | {ev.title[:50]} | depth={ev.depth}"
+        if ev.type == "skip":
+            line += " (SKIP — already indexed)"
+        elif ev.type == "indexed":
+            line += f" | nodes={ev.message}"
+        elif ev.type == "error":
+            line += f" | ERROR: {ev.message}"
+        progress_lines.append(line)
+
+    try:
+        kg = await deep_scanner.scan(url, job, on_event=on_event)
+        _graph_store[kg.id] = kg
+        return json.dumps({
+            "graph_id": kg.id,
+            "title": kg.title,
+            "node_count": len(kg.nodes),
+            "edge_count": len(kg.edges),
+            "total_found": job.total_found,
+            "total_indexed": job.total_indexed,
+            "total_skipped": job.total_skipped,
+            "progress_log": progress_lines[-50:],  # last 50 lines
+            "message": (
+                f"Deep scan complete. "
+                f"Found {job.total_found} pages, "
+                f"indexed {job.total_indexed}, "
+                f"skipped {job.total_skipped} (already cached). "
+                f"Graph has {len(kg.nodes)} nodes."
+            ),
+        }, ensure_ascii=False)
+    except Exception as e:
+        logger.exception("scan_feishu_root failed")
+        return json.dumps({"error": str(e), "progress_log": progress_lines})
+
+
+async def tool_get_visited_pages() -> str:
+    from backend.feishu.scanner import get_tracker
+    tracker = get_tracker()
+    return json.dumps({
+        "count": tracker.count,
+        "pages": list(tracker.all_visited().items())[:100],
+    }, ensure_ascii=False)
+
+
+async def tool_clear_visited_cache() -> str:
+    from backend.feishu.scanner import get_tracker
+    get_tracker().clear()
+    return json.dumps({"message": "Visited cache cleared. Next scan will re-index all pages."})
+
 
 async def tool_index_feishu_document(url: str, recursive: bool = False) -> str:
     try:
@@ -507,7 +613,13 @@ def create_mcp_server():
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[mcp_types.TextContent]:
         try:
-            if name == "index_feishu_document":
+            if name == "scan_feishu_root":
+                result = await tool_scan_feishu_root(**arguments)
+            elif name == "get_visited_pages":
+                result = await tool_get_visited_pages()
+            elif name == "clear_visited_cache":
+                result = await tool_clear_visited_cache()
+            elif name == "index_feishu_document":
                 result = await tool_index_feishu_document(**arguments)
             elif name == "get_graph_overview":
                 result = await tool_get_graph_overview(**arguments)

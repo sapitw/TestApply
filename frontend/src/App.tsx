@@ -13,10 +13,11 @@
  */
 import React, { useState, useCallback } from 'react'
 import {
-  Network, Search, BookOpen, Terminal, Trash2,
+  Network, Search, BookOpen, Terminal,
   Plus, Loader2, AlertCircle, ChevronLeft, ChevronRight,
-  LayoutDashboard
+  LayoutDashboard, ScanSearch, X, Eye
 } from 'lucide-react'
+import axios from 'axios'
 
 import { graphApi, type KnowledgeGraph } from './utils/api'
 import { useGraphStore } from './stores/graphStore'
@@ -25,6 +26,7 @@ import TreeView from './components/TreeView'
 import NodeDetailPanel from './components/NodeDetailPanel'
 import PlanPanel from './components/PlanPanel'
 import MCPPanel from './components/MCPPanel'
+import ScanProgressPanel from './components/ScanProgressPanel'
 
 // ─── Search Panel ─────────────────────────────────────────────────────────────
 
@@ -105,10 +107,17 @@ export default function App() {
   const [url, setUrl] = useState('')
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
+  // Deep scan state
+  const [inputMode, setInputMode] = useState<'single' | 'scan'>('scan')
+  const [activeScanJobId, setActiveScanJobId] = useState<string | null>(null)
+  const [showScanOverlay, setShowScanOverlay] = useState(false)
+  const [clearVisited, setClearVisited] = useState(false)
+  const [visitedCount, setVisitedCount] = useState<number | null>(null)
 
   const activeGraph = activeGraphId ? graphs[activeGraphId] : null
   const graphList = Object.values(graphs)
 
+  // Single document index
   const indexDocument = useCallback(async () => {
     if (!url.trim()) return
     setLoading(true)
@@ -127,6 +136,49 @@ export default function App() {
     }
   }, [url, setLoading, setError, storeGraph, setActiveGraph])
 
+  // Deep scan
+  const startDeepScan = useCallback(async () => {
+    if (!url.trim()) return
+    setError(null)
+    try {
+      const resp = await axios.post('/api/scan', {
+        url: url.trim(),
+        root_type: 'auto',
+        clear_visited: clearVisited,
+      })
+      setActiveScanJobId(resp.data.job_id)
+      setShowScanOverlay(true)
+      setUrl('')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to start scan'
+      setError(msg)
+    }
+  }, [url, clearVisited, setError])
+
+  // Called when scan finishes
+  const onScanDone = useCallback(async (graphId: string) => {
+    try {
+      const graph = await graphApi.get(graphId)
+      storeGraph(graph)
+      setActiveGraph(graph.id)
+    } catch {/* ignore */}
+    // Auto-close overlay after 1.5s
+    setTimeout(() => setShowScanOverlay(false), 1500)
+  }, [storeGraph, setActiveGraph])
+
+  // Fetch visited count
+  const fetchVisitedCount = useCallback(async () => {
+    try {
+      const resp = await axios.get('/api/visited')
+      setVisitedCount(resp.data.count)
+    } catch {/* ignore */}
+  }, [])
+
+  const clearVisitedCache = useCallback(async () => {
+    await axios.delete('/api/visited')
+    setVisitedCount(0)
+  }, [])
+
   const SIDEBAR_TABS = [
     { id: 'tree', icon: LayoutDashboard, label: '结构树' },
     { id: 'search', icon: Search, label: '搜索' },
@@ -143,23 +195,75 @@ export default function App() {
           <span className="font-semibold text-sm text-slate-100">飞书知识图谱</span>
         </div>
 
-        {/* URL Input */}
+        {/* Mode toggle */}
+        <div className="flex rounded-lg overflow-hidden border border-slate-600 flex-shrink-0">
+          <button
+            onClick={() => setInputMode('scan')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors
+              ${inputMode === 'scan' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            <ScanSearch size={12} />
+            深度扫描
+          </button>
+          <button
+            onClick={() => setInputMode('single')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors
+              ${inputMode === 'single' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            <Plus size={12} />
+            单文档
+          </button>
+        </div>
+
+        {/* URL Input + Action */}
         <div className="flex-1 flex gap-2 max-w-2xl">
           <input
             value={url}
             onChange={e => setUrl(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && indexDocument()}
-            placeholder="输入飞书文档 URL（支持文档、Wiki、表格、多维表格…）"
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                inputMode === 'scan' ? startDeepScan() : indexDocument()
+              }
+            }}
+            placeholder={
+              inputMode === 'scan'
+                ? '输入飞书根目录路径（Wiki 知识库、文件夹 URL 或 Token）'
+                : '输入飞书文档 URL（文档、表格、多维表格…）'
+            }
             className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
           />
-          <button
-            onClick={indexDocument}
-            disabled={loading || !url.trim()}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            {loading ? '处理中…' : '导入'}
-          </button>
+
+          {inputMode === 'scan' ? (
+            <>
+              {/* Clear visited toggle */}
+              <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={clearVisited}
+                  onChange={e => setClearVisited(e.target.checked)}
+                  className="accent-blue-500"
+                />
+                重新扫描
+              </label>
+              <button
+                onClick={startDeepScan}
+                disabled={!url.trim()}
+                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+              >
+                <ScanSearch size={14} />
+                开始扫描
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={indexDocument}
+              disabled={loading || !url.trim()}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              {loading ? '处理中…' : '导入'}
+            </button>
+          )}
         </div>
 
         {/* Graph tabs */}
@@ -189,14 +293,76 @@ export default function App() {
           </div>
         )}
 
+        {/* Visited cache status */}
+        <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+          {activeScanJobId && (
+            <button
+              onClick={() => setShowScanOverlay(true)}
+              className="flex items-center gap-1.5 text-[11px] text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              <Eye size={11} />
+              查看进度
+            </button>
+          )}
+          <button
+            onClick={fetchVisitedCount}
+            className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+            title="查看已扫描页面数量"
+          >
+            <ScanSearch size={11} />
+            {visitedCount !== null ? `${visitedCount} 已缓存` : '缓存'}
+          </button>
+          {visitedCount !== null && visitedCount > 0 && (
+            <button
+              onClick={clearVisitedCache}
+              className="text-[11px] text-red-500/70 hover:text-red-400 transition-colors"
+              title="清除已扫描缓存"
+            >
+              ✕ 清除
+            </button>
+          )}
+        </div>
+
         {/* Stats */}
         {activeGraph && (
-          <div className="ml-auto flex gap-3 text-[11px] text-slate-500 flex-shrink-0">
+          <div className="flex gap-3 text-[11px] text-slate-500 flex-shrink-0">
             <span>{activeGraph.nodes.length} nodes</span>
             <span>{activeGraph.edges.length} edges</span>
           </div>
         )}
       </header>
+
+      {/* ─── Scan Progress Overlay ───────────────────────────── */}
+      {showScanOverlay && activeScanJobId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl flex flex-col"
+            style={{ width: 680, height: 520 }}
+          >
+            {/* Overlay header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+              <div className="flex items-center gap-2">
+                <ScanSearch size={16} className="text-blue-400" />
+                <span className="font-semibold text-sm text-slate-100">深度扫描进度</span>
+                <code className="text-[10px] text-slate-500 ml-1">{activeScanJobId.slice(0, 8)}…</code>
+              </div>
+              <button
+                onClick={() => setShowScanOverlay(false)}
+                className="text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            {/* Panel */}
+            <div className="flex-1 min-h-0">
+              <ScanProgressPanel
+                jobId={activeScanJobId}
+                onDone={onScanDone}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Error Bar ──────────────────────────────────────── */}
       {error && (
@@ -262,11 +428,16 @@ export default function App() {
               <div className="flex-1 min-h-0 overflow-hidden">
                 {!activeGraph ? (
                   <div className="flex flex-col items-center justify-center h-full text-slate-500 text-xs gap-3 p-4 text-center">
-                    <Network size={32} className="opacity-30" />
-                    <p>输入飞书文档链结并点击「导入」以构建知识图谱</p>
+                    <ScanSearch size={32} className="opacity-30" />
+                    <p>输入飞书根目录路径，点击「开始扫描」</p>
                     <p className="text-[10px] text-slate-600">
-                      支持：文档、Wiki 知识库、电子表格、多维表格、文件夹
+                      自动递归扫描所有层级，自动跳过已索引页面
                     </p>
+                    <div className="flex flex-col gap-1 text-[10px] text-slate-600 mt-2 text-left">
+                      <span>📚 Wiki 知识库 → 扫描所有子页面</span>
+                      <span>📁 云文档文件夹 → 扫描所有子文件</span>
+                      <span>📝 单一文档 → 跟随内部链接</span>
+                    </div>
                   </div>
                 ) : (
                   <>
@@ -285,15 +456,28 @@ export default function App() {
         <div className="flex-1 min-w-0 relative">
           {!activeGraph ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-4">
-              <Network size={64} className="opacity-20" />
+              <ScanSearch size={64} className="opacity-20" />
               <div className="text-center">
                 <p className="text-lg font-medium text-slate-500">飞书知识图谱</p>
-                <p className="text-sm mt-1">输入飞书文档链结开始构建知识图谱</p>
+                <p className="text-sm mt-1">输入根目录 URL，自动扫描全部层级文档</p>
               </div>
-              <div className="flex flex-wrap gap-2 justify-center text-xs text-slate-600 max-w-md mt-2">
-                {['📝 飞书文档', '📊 电子表格', '📚 Wiki 知识库', '🗃️ 多维表格', '📁 文件夹'].map(t => (
-                  <span key={t} className="px-2 py-1 bg-slate-800 rounded">{t}</span>
-                ))}
+              <div className="flex flex-col gap-2 text-xs text-slate-600 max-w-xs mt-1 bg-slate-800/40 rounded-xl p-4 border border-slate-700">
+                <div className="flex items-start gap-2">
+                  <span>1️⃣</span>
+                  <span>在上方输入飞书 Wiki 或文件夹根目录 URL</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span>2️⃣</span>
+                  <span>点击「开始扫描」，系统自动递归所有层级</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span>3️⃣</span>
+                  <span>已扫描过的页面自动跳过，增量更新</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span>4️⃣</span>
+                  <span>扫描完成后自动生成知识图谱</span>
+                </div>
               </div>
             </div>
           ) : (
