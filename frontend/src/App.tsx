@@ -15,7 +15,7 @@ import React, { useState, useCallback } from 'react'
 import {
   Network, Search, BookOpen, Terminal, Zap,
   Plus, Loader2, AlertCircle, ChevronLeft, ChevronRight,
-  LayoutDashboard, ScanSearch, X, Eye, Clock, AlertTriangle
+  LayoutDashboard, ScanSearch, X, Eye, Clock, AlertTriangle, BarChart3
 } from 'lucide-react'
 import axios from 'axios'
 
@@ -30,6 +30,7 @@ import ScanProgressPanel from './components/ScanProgressPanel'
 import DifyPanel from './components/DifyPanel'
 import TimelinePanel from './components/TimelinePanel'
 import PendingQueue from './components/PendingQueue'
+import AnalyticsPanel from './components/AnalyticsPanel'
 
 // ─── Search Panel ─────────────────────────────────────────────────────────────
 
@@ -183,13 +184,14 @@ export default function App() {
   }, [])
 
   const SIDEBAR_TABS = [
-    { id: 'tree',     icon: LayoutDashboard, label: '结构树' },
-    { id: 'search',   icon: Search,          label: '搜索'   },
-    { id: 'timeline', icon: Clock,           label: '时间线' },
-    { id: 'pending',  icon: AlertTriangle,   label: '待判断' },
-    { id: 'plan',     icon: BookOpen,        label: '计划'   },
-    { id: 'dify',     icon: Zap,             label: 'DIFY'  },
-    { id: 'mcp',      icon: Terminal,        label: 'MCP'   },
+    { id: 'tree',      icon: LayoutDashboard, label: '结构树' },
+    { id: 'search',    icon: Search,          label: '搜索'   },
+    { id: 'timeline',  icon: Clock,           label: '时间线' },
+    { id: 'pending',   icon: AlertTriangle,   label: '待判断' },
+    { id: 'analytics', icon: BarChart3,       label: '分析'   },
+    { id: 'plan',      icon: BookOpen,        label: '计划'   },
+    { id: 'dify',      icon: Zap,             label: 'DIFY'  },
+    { id: 'mcp',       icon: Terminal,        label: 'MCP'   },
   ] as const
 
   return (
@@ -452,10 +454,11 @@ export default function App() {
                   </div>
                 ) : (
                   <>
-                    {sidebarTab === 'tree'     && <TreeView graph={activeGraph} />}
+                    {sidebarTab === 'tree'      && <TreeView graph={activeGraph} />}
                     {sidebarTab === 'search'   && <SearchPanel graph={activeGraph} />}
                     {sidebarTab === 'timeline' && <TimelinePanel graphId={activeGraph.id} />}
                     {sidebarTab === 'pending'  && <PendingQueue graphId={activeGraph.id} />}
+                    {sidebarTab === 'analytics'&& <AnalyticsPanel graphId={activeGraph.id} />}
                     {sidebarTab === 'plan'     && <PlanPanel graphId={activeGraph.id} />}
                   </>
                 )}

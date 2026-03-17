@@ -73,13 +73,28 @@ async def health():
 
 
 async def _auto_temporal_sync(graph_id: str):
-    """Fire-and-forget temporal sync after indexing / scanning."""
+    """Fire-and-forget: temporal sync + disk persistence after indexing / scanning."""
     try:
         from backend.api.temporal import sync_graph as _sync
+        from backend.graph.persistence import save_graph, save_temporal
+        from backend.graph.temporal import get_temporal_store
+        from backend.mcp.server import _graph_store
+        from backend.graph.algorithms import invalidate_cache
+        # Temporal diff
         await _sync(graph_id)
         logger.info(f"Temporal auto-sync completed for graph {graph_id[:8]}")
+        # Persist to disk
+        kg = _graph_store.get(graph_id)
+        if kg:
+            save_graph(kg)
+        ts = get_temporal_store(graph_id)
+        if ts:
+            save_temporal(ts)
+        # Invalidate algorithm cache
+        invalidate_cache(graph_id)
+        logger.info(f"Graph {graph_id[:8]} persisted to disk")
     except Exception as e:
-        logger.warning(f"Temporal auto-sync failed for {graph_id[:8]}: {e}")
+        logger.warning(f"Post-index tasks failed for {graph_id[:8]}: {e}")
 
 
 @router.post("/documents/index")
@@ -183,11 +198,15 @@ async def export_graph(req: ExportRequest):
 
 @router.delete("/graphs/{graph_id}")
 async def delete_graph(graph_id: str):
-    """Remove a graph from memory."""
+    """Remove a graph from memory and disk."""
     store = get_graph_store()
     if graph_id not in store:
         raise HTTPException(status_code=404, detail="Graph not found")
     del store[graph_id]
+    from backend.graph.persistence import delete_graph_files
+    from backend.graph.algorithms import invalidate_cache
+    delete_graph_files(graph_id)
+    invalidate_cache(graph_id)
     return {"message": f"Graph {graph_id} deleted"}
 
 

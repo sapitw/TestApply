@@ -12,6 +12,7 @@ from backend.config import settings
 from backend.api.routes import router
 from backend.api.dify import router as dify_router
 from backend.api.temporal import router as temporal_router
+from backend.api.analytics import router as analytics_router
 from backend.api.auth import _bootstrap as auth_bootstrap
 
 app = FastAPI(
@@ -39,6 +40,7 @@ app.add_middleware(
 app.include_router(router)
 app.include_router(dify_router)
 app.include_router(temporal_router)
+app.include_router(analytics_router)
 
 # Serve frontend static files if built
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
@@ -57,6 +59,12 @@ if os.path.exists(STATIC_DIR):
 @app.on_event("startup")
 async def startup():
     auth_bootstrap()
+    # Restore persisted graphs + temporal stores from disk
+    from backend.graph.persistence import restore_all_on_startup
+    from backend.mcp.server import _graph_store
+    g_count, t_count = restore_all_on_startup(_graph_store)
+    if g_count:
+        logger.info(f"Restored {g_count} graph(s) and {t_count} temporal store(s) from disk")
     logger.info(f"Feishu Knowledge Graph API started on {settings.HOST}:{settings.PORT}")
     logger.info(f"Feishu App ID: {settings.FEISHU_APP_ID or '(not configured)'}")
     logger.info(f"API docs: http://{settings.HOST}:{settings.PORT}/docs")
