@@ -11,6 +11,7 @@ from loguru import logger
 from backend.config import settings
 from backend.api.routes import router
 from backend.api.dify import router as dify_router
+from backend.api.temporal import router as temporal_router
 from backend.api.auth import _bootstrap as auth_bootstrap
 
 app = FastAPI(
@@ -37,6 +38,7 @@ app.add_middleware(
 # API routes
 app.include_router(router)
 app.include_router(dify_router)
+app.include_router(temporal_router)
 
 # Serve frontend static files if built
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

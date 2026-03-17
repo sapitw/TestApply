@@ -72,16 +72,28 @@ async def health():
     return {"status": "ok", "service": "feishu-knowledge-graph"}
 
 
+async def _auto_temporal_sync(graph_id: str):
+    """Fire-and-forget temporal sync after indexing / scanning."""
+    try:
+        from backend.api.temporal import sync_graph as _sync
+        await _sync(graph_id)
+        logger.info(f"Temporal auto-sync completed for graph {graph_id[:8]}")
+    except Exception as e:
+        logger.warning(f"Temporal auto-sync failed for {graph_id[:8]}: {e}")
+
+
 @router.post("/documents/index")
-async def index_document(req: IndexRequest):
+async def index_document(req: IndexRequest, background_tasks: BackgroundTasks):
     """
     Index a Feishu document and build its knowledge graph.
     Returns graph_id for subsequent queries.
+    Auto-triggers temporal sync in background.
     """
     result_str = await tool_index_feishu_document(req.url, req.recursive)
     result = json.loads(result_str)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
+    background_tasks.add_task(_auto_temporal_sync, result["graph_id"])
     return result
 
 
@@ -276,6 +288,8 @@ async def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
             from backend.mcp.server import store_graph
             store_graph(kg)
             job.graph_id = kg.id
+            # Auto temporal sync
+            await _auto_temporal_sync(kg.id)
         except Exception as e:
             job.status = "error"
             job.error = str(e)

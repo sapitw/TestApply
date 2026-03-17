@@ -15,7 +15,7 @@ import React, { useState, useCallback } from 'react'
 import {
   Network, Search, BookOpen, Terminal, Zap,
   Plus, Loader2, AlertCircle, ChevronLeft, ChevronRight,
-  LayoutDashboard, ScanSearch, X, Eye
+  LayoutDashboard, ScanSearch, X, Eye, Clock, AlertTriangle
 } from 'lucide-react'
 import axios from 'axios'
 
@@ -28,6 +28,8 @@ import PlanPanel from './components/PlanPanel'
 import MCPPanel from './components/MCPPanel'
 import ScanProgressPanel from './components/ScanProgressPanel'
 import DifyPanel from './components/DifyPanel'
+import TimelinePanel from './components/TimelinePanel'
+import PendingQueue from './components/PendingQueue'
 
 // ─── Search Panel ─────────────────────────────────────────────────────────────
 
@@ -181,11 +183,13 @@ export default function App() {
   }, [])
 
   const SIDEBAR_TABS = [
-    { id: 'tree', icon: LayoutDashboard, label: '结构树' },
-    { id: 'search', icon: Search, label: '搜索' },
-    { id: 'plan', icon: BookOpen, label: '计划' },
-    { id: 'dify', icon: Zap, label: 'DIFY' },
-    { id: 'mcp', icon: Terminal, label: 'MCP' },
+    { id: 'tree',     icon: LayoutDashboard, label: '结构树' },
+    { id: 'search',   icon: Search,          label: '搜索'   },
+    { id: 'timeline', icon: Clock,           label: '时间线' },
+    { id: 'pending',  icon: AlertTriangle,   label: '待判断' },
+    { id: 'plan',     icon: BookOpen,        label: '计划'   },
+    { id: 'dify',     icon: Zap,             label: 'DIFY'  },
+    { id: 'mcp',      icon: Terminal,        label: 'MCP'   },
   ] as const
 
   return (
@@ -380,7 +384,7 @@ export default function App() {
         {/* Left Sidebar */}
         <div
           className="flex flex-col border-r border-slate-700 bg-slate-900 transition-all duration-200 flex-shrink-0"
-          style={{ width: leftCollapsed ? 40 : 280 }}
+          style={{ width: leftCollapsed ? 40 : 300 }}
         >
           {leftCollapsed ? (
             <div className="flex flex-col items-center py-3 gap-3">
@@ -448,9 +452,11 @@ export default function App() {
                   </div>
                 ) : (
                   <>
-                    {sidebarTab === 'tree' && <TreeView graph={activeGraph} />}
-                    {sidebarTab === 'search' && <SearchPanel graph={activeGraph} />}
-                    {sidebarTab === 'plan' && <PlanPanel graphId={activeGraph.id} />}
+                    {sidebarTab === 'tree'     && <TreeView graph={activeGraph} />}
+                    {sidebarTab === 'search'   && <SearchPanel graph={activeGraph} />}
+                    {sidebarTab === 'timeline' && <TimelinePanel graphId={activeGraph.id} />}
+                    {sidebarTab === 'pending'  && <PendingQueue graphId={activeGraph.id} />}
+                    {sidebarTab === 'plan'     && <PlanPanel graphId={activeGraph.id} />}
                   </>
                 )}
               </div>
