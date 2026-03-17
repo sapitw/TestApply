@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # CORS origins for frontend
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
+    # DIFY / external agent API key (optional; if empty, all requests are allowed)
+    DIFY_API_KEY: str = ""
+    # Public base URL for this server (used in OpenAPI schema returned to DIFY)
+    PUBLIC_BASE_URL: str = "http://localhost:8000"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

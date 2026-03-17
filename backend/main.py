@@ -10,12 +10,17 @@ from loguru import logger
 
 from backend.config import settings
 from backend.api.routes import router
+from backend.api.dify import router as dify_router
+from backend.api.auth import _bootstrap as auth_bootstrap
 
 app = FastAPI(
-    title="Feishu Knowledge Graph",
+    title="飞书知识图谱 API",
     description=(
-        "A system that reads all types of Feishu documents and builds "
-        "an interactive knowledge graph. Exposes MCP tools for AI agent integration."
+        "读取所有类型飞书文档，建立交互式知识图谱。\n\n"
+        "- `/api/*` — 内部 REST API（供前端与 MCP 使用）\n"
+        "- `/dify/*` — **DIFY LLM Tool 接口**（OpenAPI 3.0，可直接导入 DIFY）\n"
+        "- `/dify/openapi.json` — DIFY Custom Tool Schema\n"
+        "- `/docs` — 完整 API 文档"
     ),
     version="1.0.0",
 )
@@ -31,6 +36,7 @@ app.add_middleware(
 
 # API routes
 app.include_router(router)
+app.include_router(dify_router)
 
 # Serve frontend static files if built
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
@@ -48,9 +54,11 @@ if os.path.exists(STATIC_DIR):
 
 @app.on_event("startup")
 async def startup():
+    auth_bootstrap()
     logger.info(f"Feishu Knowledge Graph API started on {settings.HOST}:{settings.PORT}")
     logger.info(f"Feishu App ID: {settings.FEISHU_APP_ID or '(not configured)'}")
     logger.info(f"API docs: http://{settings.HOST}:{settings.PORT}/docs")
+    logger.info(f"DIFY schema: {settings.PUBLIC_BASE_URL}/dify/openapi.json")
 
 
 if __name__ == "__main__":

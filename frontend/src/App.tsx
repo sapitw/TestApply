@@ -13,7 +13,7 @@
  */
 import React, { useState, useCallback } from 'react'
 import {
-  Network, Search, BookOpen, Terminal,
+  Network, Search, BookOpen, Terminal, Zap,
   Plus, Loader2, AlertCircle, ChevronLeft, ChevronRight,
   LayoutDashboard, ScanSearch, X, Eye
 } from 'lucide-react'
@@ -27,6 +27,7 @@ import NodeDetailPanel from './components/NodeDetailPanel'
 import PlanPanel from './components/PlanPanel'
 import MCPPanel from './components/MCPPanel'
 import ScanProgressPanel from './components/ScanProgressPanel'
+import DifyPanel from './components/DifyPanel'
 
 // ─── Search Panel ─────────────────────────────────────────────────────────────
 
@@ -183,6 +184,7 @@ export default function App() {
     { id: 'tree', icon: LayoutDashboard, label: '结构树' },
     { id: 'search', icon: Search, label: '搜索' },
     { id: 'plan', icon: BookOpen, label: '计划' },
+    { id: 'dify', icon: Zap, label: 'DIFY' },
     { id: 'mcp', icon: Terminal, label: 'MCP' },
   ] as const
 
@@ -426,7 +428,12 @@ export default function App() {
 
               {/* Tab content */}
               <div className="flex-1 min-h-0 overflow-hidden">
-                {!activeGraph ? (
+                {/* DIFY panel is always available regardless of graph state */}
+                {sidebarTab === 'dify' ? (
+                  <DifyPanel />
+                ) : sidebarTab === 'mcp' ? (
+                  <MCPPanel />
+                ) : !activeGraph ? (
                   <div className="flex flex-col items-center justify-center h-full text-slate-500 text-xs gap-3 p-4 text-center">
                     <ScanSearch size={32} className="opacity-30" />
                     <p>输入飞书根目录路径，点击「开始扫描」</p>
@@ -444,7 +451,6 @@ export default function App() {
                     {sidebarTab === 'tree' && <TreeView graph={activeGraph} />}
                     {sidebarTab === 'search' && <SearchPanel graph={activeGraph} />}
                     {sidebarTab === 'plan' && <PlanPanel graphId={activeGraph.id} />}
-                    {sidebarTab === 'mcp' && <MCPPanel />}
                   </>
                 )}
               </div>
