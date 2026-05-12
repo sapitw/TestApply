@@ -1,0 +1,38 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+TestResults/
+
+# Node / Vite
+node_modules/
+dist/
+.parcel-cache/
+.vite/
+*.local
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+
+# Dev DB
+db/*.db
+db/*.db-journal
+
+# Logs
+*.log
+/tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# User-secret config
+appsettings.Production.json
+appsettings.Local.json
+.env
+.env.local

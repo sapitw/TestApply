@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CXMTCode.Plugins.MSSQL2019</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CXMTCode.Plugins.Common\CXMTCode.Plugins.Common.csproj" />
+  </ItemGroup>
+</Project>

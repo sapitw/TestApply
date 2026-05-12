@@ -1,0 +1,76 @@
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #070d19;
+  color: #ffffff;
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+::-webkit-scrollbar-thumb { background: rgba(0,136,255,0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,136,255,0.6); }
+
+::selection { background: rgba(0,136,255,0.3); color: #fff; }
+
+.cxmt-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 9999;
+  height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  gap: 16px;
+  font-size: 13px;
+  user-select: none;
+}
+.cxmt-banner.prod {
+  background: linear-gradient(90deg, #1a0000 0%, #660000 50%, #1a0000 100%);
+  border-bottom: 2px solid #ff4d4f;
+}
+.cxmt-banner.test {
+  background: linear-gradient(90deg, #001a00 0%, #006600 50%, #001a00 100%);
+  border-bottom: 2px solid #52c41a;
+}
+
+.cxmt-content {
+  margin-top: 36px;
+  min-height: calc(100vh - 36px);
+}
+
+.data-card {
+  background: rgba(13, 27, 60, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  transition: all 0.3s;
+}
+.data-card:hover {
+  border-color: rgba(0,136,255,0.3);
+  box-shadow: 0 8px 32px rgba(0,136,255,0.15);
+  transform: translateY(-2px);
+}
+.data-card .number {
+  font-size: 48px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #0088ff, #00d4ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.cxmt-page {
+  padding: 24px;
+}
+
+.cxmt-hero-title {
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, #0088ff, #00d4ff, #0088ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}

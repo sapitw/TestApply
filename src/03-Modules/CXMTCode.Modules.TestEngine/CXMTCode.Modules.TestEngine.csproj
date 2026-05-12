@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CXMTCode.Modules.TestEngine</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\01-Kernel\CXMTCode.Kernel.Contracts\CXMTCode.Kernel.Contracts.csproj" />
+    <ProjectReference Include="..\..\02-Plugins\CXMTCode.Plugins.TestEngine\CXMTCode.Plugins.TestEngine.csproj" />
+  </ItemGroup>
+</Project>

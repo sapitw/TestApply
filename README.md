@@ -1,149 +1,143 @@
-# 飞书知识图谱 (Feishu Knowledge Graph)
+# CXMTCode 多数据库变更管控平台 (V3.0)
 
-一套完整的飞书文档知识图谱系统，支持读取所有类型的飞书文档，自动构建可视化树状知识图谱，并通过 MCP 协议为 AI 智能体提供知识库接口。
+> 半导体行业多数据库变更管控平台 · 微内核 + 插件化架构 · RBAC 三角色 · 国密合规 · TEST/PROD 双环境
 
-## 功能特性
+## 技术栈
 
-### 文档支持（全类型）
-| 类型 | 说明 |
-|------|------|
-| 📝 飞书文档 (Docx) | 标题层级、代码块、超链接 |
-| 📚 Wiki 知识库 | 完整树状结构递归读取 |
-| 📊 电子表格 (Sheets) | 工作表元数据 |
-| 🗃️ 多维表格 (Bitable) | 表格与字段结构 |
-| 📁 云文档文件夹 | 递归文件列表 |
+| 层 | 技术 |
+| --- | --- |
+| 后端 | C# 12 · .NET 8.0 LTS · ASP.NET Core · Dapper |
+| 前端 | React 18 · TypeScript 5 · Ant Design X · dnd-kit · Zustand · Vite |
+| 系统 DB | Oracle 19C Enterprise（生产）/ SQLite（开发） |
+| 业务 DB | Oracle 19C / MSSQL 2019 / MySQL 8.0+ / DB2 11.5~12.1 |
+| 安全 | JWT · 国密 SM2/SM3/SM4（占位实现）· 等保 2.0 三级 |
+| 部署 | Docker · docker-compose · Nginx |
 
-### 知识图谱
-- 自动解析文档结构，生成节点与边
-- 支持层级展开、平铺视图
-- 节点颜色编码（按类型）
-- 交互式缩放、平移、小地图
-- 选中节点查看详情
+## 仓库布局
 
-### MCP 工具（AI 智能体集成）
-| 工具 | 描述 |
-|------|------|
-| `index_feishu_document` | 通过 URL 索引飞书文档，建立图谱 |
-| `get_graph_overview` | 获取图谱高层概览 |
-| `get_node_subtree` | 获取节点子树 |
-| `search_graph` | 关键字搜索节点 |
-| `get_code_dependencies` | 分析代码上下游依赖 |
-| `generate_training_plan` | 生成培训计划（Markdown） |
-| `generate_maintenance_plan` | 生成运维计划（Markdown） |
-| `export_graph` | 导出 JSON / Markdown / Mermaid |
-| `list_graphs` | 列出所有已索引图谱 |
+```
+CXMTCode/
+├── CXMTCode.sln                            # 解决方案
+├── Directory.Build.props                   # 全局 MSBuild 属性
+├── docker-compose.yml                      # 一键部署
+├── .env.example                            # 环境变量示例
+├── build/build.sh                          # 一键构建脚本
+├── db/oracle-init.sql                      # Oracle 19C 初始化 DDL
+├── docs/
+│   ├── TEST_REPORT.md                      # 测试报告
+│   └── DEPLOYMENT.md                       # 部署说明
+├── src/
+│   ├── 01-Kernel/
+│   │   ├── CXMTCode.Kernel.Contracts/      # 接口、枚举、模型
+│   │   └── CXMTCode.Kernel/                # 6 大中枢实现
+│   ├── 02-Plugins/
+│   │   ├── CXMTCode.Plugins.Common/        # B1-B5 安全 + D1-D7 执行 + 适配抽象
+│   │   ├── CXMTCode.Plugins.Oracle19c/     # C1 Oracle 适配
+│   │   ├── CXMTCode.Plugins.MSSQL2019/     # C2 MSSQL 适配
+│   │   ├── CXMTCode.Plugins.MySQL80/       # C3 MySQL 适配
+│   │   ├── CXMTCode.Plugins.DB2_115/       # C4 DB2 适配
+│   │   ├── CXMTCode.Plugins.Audit/         # E1-E7 流程审计
+│   │   └── CXMTCode.Plugins.TestEngine/    # F1-F5 测试引擎
+│   ├── 03-Modules/
+│   │   ├── CXMTCode.Modules.Schema/        # 用户/连接/变更/模板/规则
+│   │   ├── CXMTCode.Modules.Audit/         # 审计查询
+│   │   └── CXMTCode.Modules.TestEngine/    # 测试管理
+│   ├── 04-Web/
+│   │   ├── CXMTCode.Web.Api/               # ASP.NET Core Web API
+│   │   └── CXMTCode.Web.React/             # React 前端
+│   └── 05-Infrastructure/
+│       ├── CXMTCode.Infrastructure/        # 国密 / 雪花算法
+│       └── CXMTCode.Infrastructure.Db/     # Dapper / SystemDbContext
+└── tests/
+    └── CXMTCode.Tests/                     # xUnit 单元 + 集成测试
+```
 
-## 快速启动
+## 快速启动（本地开发）
 
-### 1. 环境配置
+### 后端
 
 ```bash
+# 1) 复制环境变量
 cp .env.example .env
-# 编辑 .env，填写飞书应用 App ID 和 App Secret
+
+# 2) 启动 API（默认 SQLite，自动建表 + 注入 admin 账号）
+dotnet run --project src/04-Web/CXMTCode.Web.Api
+#   API: http://localhost:5099
+#   Swagger: http://localhost:5099/swagger
 ```
 
-### 2. 后端启动
+### 前端
 
 ```bash
-cd backend
-pip install -r requirements.txt
-uvicorn backend.main:app --reload --port 8000
-```
-
-### 3. 前端启动
-
-```bash
-cd frontend
+cd src/04-Web/CXMTCode.Web.React
 npm install
 npm run dev
-# 访问 http://localhost:5173
+#   UI: http://localhost:5173
 ```
 
-### 4. Docker 一键启动
+默认账号：`admin / admin@123`（首次登录会用 SM3 哈希存储真实密码）
+
+## 一键构建
 
 ```bash
-docker-compose up --build
+./build/build.sh
+# 会依次：
+#   1. dotnet build CXMTCode.sln -c Release
+#   2. dotnet test  CXMTCode.sln -c Release（27/27 全通过）
+#   3. npm install + vite build
 ```
 
-## 飞书应用配置
+## Docker 部署
 
-1. 前往 [飞书开放平台](https://open.feishu.cn/app) 创建企业自建应用
-2. 开启以下权限：
-   - `docs:doc:readonly` 文档读取
-   - `drive:drive:readonly` 云空间读取
-   - `wiki:wiki:readonly` 知识库读取
-   - `bitable:app:readonly` 多维表格读取
-   - `sheets:spreadsheet:readonly` 电子表格读取
-3. 将 App ID / App Secret 填入 `.env`
-
-## MCP 集成（Claude Desktop）
-
-将以下配置添加至 `~/.claude/claude_desktop_config.json`：
-
-```json
-{
-  "mcpServers": {
-    "feishu-knowledge-graph": {
-      "command": "python",
-      "args": ["-m", "backend.mcp.server"],
-      "cwd": "/path/to/TestApply",
-      "env": {
-        "FEISHU_APP_ID": "your_app_id",
-        "FEISHU_APP_SECRET": "your_app_secret"
-      }
-    }
-  }
-}
+```bash
+docker compose up --build -d
+# 访问：
+#   前端：http://localhost
+#   后端：http://localhost:8080
+#   Swagger：http://localhost:8080/swagger
 ```
 
-重启 Claude Desktop 后即可使用：
-- "帮我索引这个飞书文档：https://xxx.feishu.cn/docx/TOKEN"
-- "根据这个知识图谱为新工程师生成培训计划"
-- "分析这段代码的上下游依赖关系"
+详细生产部署与 Oracle 19C 连接配置见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
-## HTTP API（供其他系统集成）
+## 权限模型（RBAC 三角色）
 
-```
-POST /api/documents/index        # 索引文档
-GET  /api/graphs                 # 列出图谱
-GET  /api/graphs/{id}            # 获取完整图谱
-GET  /api/graphs/{id}/overview   # 获取概览
-POST /api/graphs/search          # 搜索
-POST /api/plans/training         # 生成培训计划
-POST /api/plans/maintenance      # 生成运维计划
-POST /api/graphs/export          # 导出图谱
-POST /api/mcp/call               # HTTP 方式调用 MCP 工具
-```
+| 角色 | 范围 |
+| --- | --- |
+| 普通用户 User (1) | 变更申请、预演、执行/回滚自己申请、查看自己审计 |
+| DBA 管理员 (2) | 继承 User + 表准入 / DELETE 模板 / 白名单 / DB 连接配置 / 全部审计 |
+| 系统管理员 (3) | 继承 DBA + 用户角色分配 / TEST↔PROD 环境切换 / 测试管理 / 系统配置 |
 
-API 文档：`http://localhost:8000/docs`
+层级继承通过 `(int)current >= (int)required` 在 `UserContext.HasRole` 中实现。
 
-## 架构
+## 10 条硬编码安全红线（不可关闭）
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     React Frontend (Vite)                       │
-│  ┌───────────────┐  ┌─────────────────────┐  ┌──────────────┐  │
-│  │  左侧栏        │  │  知识图谱画布        │  │  节点详情    │  │
-│  │  - 结构树      │  │  (React Flow)       │  │  - 内容预览  │  │
-│  │  - 搜索        │  │  - 节点 / 边        │  │  - 元数据    │  │
-│  │  - 生成计划    │  │  - 缩放 / 平移      │  │  - 链接      │  │
-│  │  - MCP 工具    │  │  - 小地图           │  │              │  │
-│  └───────────────┘  └─────────────────────┘  └──────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │ HTTP /api
-┌─────────────────────────────────────────────────────────────────┐
-│                    FastAPI Backend                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐    │
-│  │ Feishu Client│  │ Graph Builder│  │    MCP Server      │    │
-│  │ - Auth Token │  │ - Node/Edge  │  │ - 9 Tools          │    │
-│  │ - Docx/Wiki/ │  │ - Hierarchy  │  │ - stdio transport  │    │
-│  │   Sheet/BT/  │  │ - Layout     │  │ - HTTP transport   │    │
-│  │   Folder     │  │ - Merge      │  │                    │    │
-│  └──────────────┘  └──────────────┘  └────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────────┐
-│              飞书 Open API (HTTPS)                               │
-│  /docx  /wiki  /sheets  /bitable  /drive                        │
-└─────────────────────────────────────────────────────────────────┘
-```
+| 编号 | 规则 |
+| --- | --- |
+| RL001 | 禁止 DROP |
+| RL002 | 禁止 TRUNCATE |
+| RL003 | UPDATE 必须带 WHERE |
+| RL004 | DELETE 必须带 WHERE |
+| RL005 | 禁止访问审计日志表 |
+| RL006 | 禁止 GRANT / REVOKE |
+| RL007 | 禁止 CREATE USER |
+| RL008 | 禁止 ALTER SYSTEM |
+| RL009 | 禁止可疑注释注入 |
+| RL010 | 禁止 UNION |
+
+## TODO 路线图
+
+- [ ] 替换国密占位实现为真实 GMSSL 绑定
+- [ ] C1-C4 适配器接入真实 Oracle / MSSQL / MySQL / DB2 驱动
+- [ ] D5 回滚 SQL 生成器（基于备份表的反向 DML）
+- [ ] ANTLR4 AST 解析替换正则方案
+- [ ] PluginRegistry 扫描 plugins/ 目录的程序集动态加载
+- [ ] 测试引擎 F1-F5 完整接线
+- [ ] 用户表级授权（CXMT_TABLE_PERMISSIONS）CRUD 前端
+- [ ] 21CFR Part11 合规报告导出（PDF / HTML）
+
+## 文档索引
+
+- 系统架构总览：根据 KimiCode 规格 V3.0（已重命名为 CXMTCode）
+- 测试报告：[docs/TEST_REPORT.md](docs/TEST_REPORT.md)
+- 部署说明：[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- API 文档：启动后访问 `/swagger`

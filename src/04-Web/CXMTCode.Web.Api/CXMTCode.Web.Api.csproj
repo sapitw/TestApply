@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>CXMTCode.Web.Api</RootNamespace>
+    <UserSecretsId>cxmtcode-web-api-dev</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\01-Kernel\CXMTCode.Kernel.Contracts\CXMTCode.Kernel.Contracts.csproj" />
+    <ProjectReference Include="..\..\01-Kernel\CXMTCode.Kernel\CXMTCode.Kernel.csproj" />
+    <ProjectReference Include="..\..\02-Plugins\CXMTCode.Plugins.Common\CXMTCode.Plugins.Common.csproj" />
+    <ProjectReference Include="..\..\02-Plugins\CXMTCode.Plugins.Oracle19c\CXMTCode.Plugins.Oracle19c.csproj" />
+    <ProjectReference Include="..\..\02-Plugins\CXMTCode.Plugins.MSSQL2019\CXMTCode.Plugins.MSSQL2019.csproj" />
+    <ProjectReference Include="..\..\02-Plugins\CXMTCode.Plugins.MySQL80\CXMTCode.Plugins.MySQL80.csproj" />
+    <ProjectReference Include="..\..\02-Plugins\CXMTCode.Plugins.DB2_115\CXMTCode.Plugins.DB2_115.csproj" />
+    <ProjectReference Include="..\..\02-Plugins\CXMTCode.Plugins.Audit\CXMTCode.Plugins.Audit.csproj" />
+    <ProjectReference Include="..\..\02-Plugins\CXMTCode.Plugins.TestEngine\CXMTCode.Plugins.TestEngine.csproj" />
+    <ProjectReference Include="..\..\03-Modules\CXMTCode.Modules.Schema\CXMTCode.Modules.Schema.csproj" />
+    <ProjectReference Include="..\..\03-Modules\CXMTCode.Modules.Audit\CXMTCode.Modules.Audit.csproj" />
+    <ProjectReference Include="..\..\03-Modules\CXMTCode.Modules.TestEngine\CXMTCode.Modules.TestEngine.csproj" />
+    <ProjectReference Include="..\..\05-Infrastructure\CXMTCode.Infrastructure\CXMTCode.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\05-Infrastructure\CXMTCode.Infrastructure.Db\CXMTCode.Infrastructure.Db.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+</Project>

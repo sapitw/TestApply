@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CXMTCode.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\01-Kernel\CXMTCode.Kernel.Contracts\CXMTCode.Kernel.Contracts.csproj" />
+  </ItemGroup>
+</Project>

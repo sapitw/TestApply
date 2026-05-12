@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CXMTCode.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk"   Version="17.11.1" />
+    <PackageReference Include="xunit"                    Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="FluentAssertions"         Version="6.12.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.10" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\01-Kernel\CXMTCode.Kernel.Contracts\CXMTCode.Kernel.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\01-Kernel\CXMTCode.Kernel\CXMTCode.Kernel.csproj" />
+    <ProjectReference Include="..\..\src\02-Plugins\CXMTCode.Plugins.Common\CXMTCode.Plugins.Common.csproj" />
+    <ProjectReference Include="..\..\src\03-Modules\CXMTCode.Modules.Schema\CXMTCode.Modules.Schema.csproj" />
+    <ProjectReference Include="..\..\src\04-Web\CXMTCode.Web.Api\CXMTCode.Web.Api.csproj" />
+    <ProjectReference Include="..\..\src\05-Infrastructure\CXMTCode.Infrastructure\CXMTCode.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\05-Infrastructure\CXMTCode.Infrastructure.Db\CXMTCode.Infrastructure.Db.csproj" />
+  </ItemGroup>
+</Project>

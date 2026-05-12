@@ -1,36 +1,70 @@
 version: '3.9'
 
+# ============================================================================
+# CXMTCode 全栈部署
+# ----------------------------------------------------------------------------
+# 默认配置：使用本地 SQLite 作系统 DB，单机即可运行。
+# 生产部署：把 systemdb 服务换成 Oracle 19C / 修改 cxmtcode-api 的连接串。
+# ============================================================================
+
 services:
-  backend:
+
+  # ---------- 后端 API ----------
+  cxmtcode-api:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: src/04-Web/CXMTCode.Web.Api/Dockerfile
+    container_name: cxmtcode-api
     ports:
-      - "8000:8000"
-    env_file: .env
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # 默认 SQLite 系统库，挂载到主机目录 ./db
+      ConnectionStrings__SystemDb: "Data Source=/data/cxmtcode-prod.db"
+      # JWT 密钥，部署后务必修改
+      JwtSettings__SecretKey: "CHANGE-ME-IN-PRODUCTION-AT-LEAST-32-CHARS-LONG!!"
+      JwtSettings__Issuer: "CXMTCode"
+      JwtSettings__Audience: "CXMTCodeReact"
+      JwtSettings__ExpirationMinutes: "480"
+      Frontend__Url: "http://localhost"
     volumes:
-      - ./backend:/app/backend
+      - cxmtcode_db:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/"]
       interval: 30s
-      timeout: 10s
-      retries: 3
+      timeout: 5s
+      retries: 5
 
-  frontend:
+  # ---------- 前端 (Nginx + 静态资源) ----------
+  cxmtcode-web:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile.frontend
+      context: src/04-Web/CXMTCode.Web.React
+      dockerfile: Dockerfile
+    container_name: cxmtcode-web
     ports:
-      - "5173:5173"
+      - "80:80"
     depends_on:
-      - backend
+      - cxmtcode-api
     restart: unless-stopped
 
-  # Optional Redis cache
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-    profiles: ["with-redis"]
+  # ---------- (可选) Oracle 19C 系统库 ----------
+  # 取消下面注释，并修改 cxmtcode-api 的 ConnectionStrings__SystemDb 指向 Oracle
+  # 即可启用 Oracle 系统 DB。镜像需要 Oracle 容器注册中心登录权限。
+  #
+  # systemdb:
+  #   image: container-registry.oracle.com/database/enterprise:19.3.0.0
+  #   container_name: cxmtcode-oracle
+  #   environment:
+  #     ORACLE_PDB: ORCLPDB1
+  #     ORACLE_PWD: "Oracle19c_Admin"
+  #   ports:
+  #     - "1521:1521"
+  #   volumes:
+  #     - cxmtcode_oracle:/opt/oracle/oradata
+  #     - ./db/oracle-init.sql:/opt/oracle/scripts/setup/01-init.sql:ro
+  #   restart: unless-stopped
+
+volumes:
+  cxmtcode_db:
+  # cxmtcode_oracle:
