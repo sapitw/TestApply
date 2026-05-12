@@ -63,7 +63,7 @@ builder.Services.AddSingleton<IRolePermissionProvider, RolePermissionProvider>()
 builder.Services.AddSingleton<IKimiTaskScheduler, KimiTaskScheduler>();
 builder.Services.AddSingleton<IDistributedTransaction, DistributedTransactionManager>();
 builder.Services.AddSingleton<ISystemConfigService, SystemConfigService>();
-builder.Services.AddScoped<IPermissionChecker, PermissionChecker>();
+builder.Services.AddSingleton<IPermissionChecker, PermissionChecker>();
 builder.Services.AddScoped<IUserContext>(sp =>
 {
     var http = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
@@ -90,11 +90,15 @@ builder.Services.AddSingleton<ChangeRequestRepository>();
 builder.Services.AddSingleton<TableAccessRepository>();
 builder.Services.AddSingleton<DeleteTemplateRepository>();
 builder.Services.AddSingleton<WhitelistRuleRepository>();
+builder.Services.AddSingleton<TablePermissionRepository>();
 
 // ============ 业务服务 ============
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddScoped<ChangeRequestService>();
 builder.Services.AddSingleton<EnvironmentService>();
+builder.Services.AddSingleton<CXMTCode.Modules.Audit.ComplianceReportService>();
+builder.Services.AddSingleton<CXMTCode.Modules.TestEngine.TestSuiteService>();
+builder.Services.AddSingleton<CXMTCode.Plugins.Common.Notification.EmailNotificationService>();
 
 // ============ 控制器 + Swagger ============
 builder.Services.AddControllers().AddJsonOptions(o =>
@@ -130,6 +134,16 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ISystemDbContext>();
     await DbSchemaInitializer.EnsureCreatedAsync(db);
+
+    // 扫描并注册所有 CXMTCode.Plugins.* 程序集中的 IPlugin 实现
+    var registry = scope.ServiceProvider.GetRequiredService<PluginRegistry>();
+    var pluginAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+        .Where(a => a.GetName().Name?.StartsWith("CXMTCode.Plugins.") == true)
+        .ToList();
+    await registry.ScanAndRegisterAsync(pluginAssemblies);
+
+    var host = scope.ServiceProvider.GetRequiredService<IPluginHost>();
+    await host.StartAllAsync();
 }
 
 if (app.Environment.IsDevelopment())

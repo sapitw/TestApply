@@ -233,6 +233,37 @@ public static class DbSchemaInitializer
             OVERRIDE_ENV TEXT NOT NULL,
             CREATED_AT   TEXT DEFAULT CURRENT_TIMESTAMP,
             EXPIRES_AT   TEXT NOT NULL
+        )",
+        @"CREATE TABLE IF NOT EXISTS CXMT_TEST_SUITES(
+            SUITE_ID      TEXT PRIMARY KEY,
+            SUITE_NAME    TEXT NOT NULL,
+            DESCRIPTION   TEXT,
+            IS_GATE       INTEGER DEFAULT 0,
+            MIN_PASS_RATE REAL    DEFAULT 0.95,
+            CREATED_BY    TEXT,
+            CREATED_AT    TEXT    DEFAULT CURRENT_TIMESTAMP
+        )",
+        @"CREATE TABLE IF NOT EXISTS CXMT_TEST_CASES(
+            CASE_ID    TEXT PRIMARY KEY,
+            SUITE_ID   TEXT NOT NULL,
+            CASE_NAME  TEXT NOT NULL,
+            CASE_TYPE  TEXT NOT NULL,
+            TARGET_SQL TEXT,
+            EXPECTED   TEXT,
+            ORDINAL    INTEGER DEFAULT 0,
+            ENABLED    INTEGER DEFAULT 1
+        )",
+        @"CREATE TABLE IF NOT EXISTS CXMT_TEST_RUNS(
+            RUN_ID       TEXT PRIMARY KEY,
+            SUITE_ID     TEXT NOT NULL,
+            STATUS       TEXT NOT NULL,
+            STARTED_AT   TEXT DEFAULT CURRENT_TIMESTAMP,
+            FINISHED_AT  TEXT,
+            TOTAL_CASES  INTEGER DEFAULT 0,
+            PASSED_CASES INTEGER DEFAULT 0,
+            FAILED_CASES INTEGER DEFAULT 0,
+            PASS_RATE    REAL    DEFAULT 0,
+            TRIGGERED_BY TEXT
         )"
     };
 }

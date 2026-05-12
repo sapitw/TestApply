@@ -13,11 +13,7 @@ public class PermissionCheckerTests
 {
     private static (PermissionChecker checker, IUserContext user) Build(UserRole role = UserRole.User)
     {
-        // 内存 SQLite + AuditLogger
-        var conn = new SqliteConnection("Data Source=:memory:");
-        conn.Open();
-        var ctx = new InMemorySystemDb(conn);
-        DbSchemaInitializer.EnsureCreatedAsync(ctx).GetAwaiter().GetResult();
+        var ctx = TestDbHelper.NewSqliteContextAsync().GetAwaiter().GetResult();
         var audit = new AuditLogger(ctx, new SnowflakeIdGenerator(2));
         var u = TestUserContext.Of(role);
         return (new PermissionChecker(audit), u);
@@ -84,16 +80,6 @@ public class PermissionCheckerTests
         r.IsAllowed.Should().BeFalse();
         r.RuleCode.Should().Be(expectedCode);
     }
-}
-
-// 单元测试用的轻量 SystemDb 实现 - 持有一个长连接的内存 SQLite，并把每次 Create 重置为同一个连接
-internal sealed class InMemorySystemDb : ISystemDbContext
-{
-    private readonly SqliteConnection _conn;
-    public string Provider => "Sqlite";
-    public DialectAdapter Dialect { get; } = new("Sqlite");
-    public InMemorySystemDb(SqliteConnection c) { _conn = c; }
-    public System.Data.Common.DbConnection CreateOpenConnection() => _conn;
 }
 
 internal sealed class TestUserContext : IUserContext

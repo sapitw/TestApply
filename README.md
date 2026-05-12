@@ -124,16 +124,25 @@ docker compose up --build -d
 | RL009 | 禁止可疑注释注入 |
 | RL010 | 禁止 UNION |
 
-## TODO 路线图
+## V3.0 已完成（阶段二）
 
-- [ ] 替换国密占位实现为真实 GMSSL 绑定
-- [ ] C1-C4 适配器接入真实 Oracle / MSSQL / MySQL / DB2 驱动
-- [ ] D5 回滚 SQL 生成器（基于备份表的反向 DML）
-- [ ] ANTLR4 AST 解析替换正则方案
-- [ ] PluginRegistry 扫描 plugins/ 目录的程序集动态加载
-- [ ] 测试引擎 F1-F5 完整接线
-- [ ] 用户表级授权（CXMT_TABLE_PERMISSIONS）CRUD 前端
-- [ ] 21CFR Part11 合规报告导出（PDF / HTML）
+- [x] **真实 SM2/SM3/SM4 国密算法**（BouncyCastle 2.4.0，含 GMT 0004 国标向量验证）
+- [x] **C1 Oracle 真实驱动**（Oracle.ManagedDataAccess.Core 23.6.1，ADG 备库强制）
+- [x] **C2 MSSQL 真实驱动**（Microsoft.Data.SqlClient 5.2.2，AlwaysOn ReadOnly 强制）
+- [x] **C3 MySQL 真实驱动**（MySqlConnector 2.3.7，GR Secondary 校验）
+- [x] **D5 回滚 SQL 生成器**（INSERT→DELETE MINUS/EXCEPT、UPDATE→UPDATE SET FROM、DELETE→INSERT SELECT）
+- [x] **增强 AST 分析器**（去引号注释、提取 JOIN 表 / SET 列 / INSERT 列 / VALUES 分组）
+- [x] **PluginRegistry DI 感知反射扫描**（启动期自动注册插件）
+- [x] **测试引擎 F1-F5**（3 表 + 套件/用例/执行 CRUD + 门禁 + 前端完整页）
+- [x] **表级用户授权 CRUD**（后端 4 API + 前端 UserGrants 页）
+- [x] **21CFR Part11 合规报告**（HTML + PDF via QuestPDF + 哈希链抽样验证）
+- [x] **D7 邮件通知**（System.Net.Mail.SmtpClient，可配置 Smtp:Enabled 开关）
+
+## 仍待生产环境补全
+
+- [ ] **C4 DB2 真实驱动**：需要 IBM clidriver 原生库 + 许可证；Dockerfile 注释已写明 RUN 步骤
+- [ ] **E3 真实证书签名**：当前 BouncyCastle SM2 占位密钥；接入企业 PKI（USBKey / HSM）需运维侧
+- [ ] **测试 Runner 真实执行**：F1-F5 占位为「全部通过」；接入 dotnet test / k6 / NBomber 后替换 `TestSuiteService.TriggerRunAsync`
 
 ## 文档索引
 

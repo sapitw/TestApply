@@ -22,19 +22,26 @@ public class SqlParserPlugin : PluginBase
     public override Task<PluginOutput> ExecuteAsync(PluginInput input)
     {
         var sql = input.GetParameter<string>("sql") ?? string.Empty;
+        // 先做基本格式化（去注释 / 去不可见字符），再用增强的 AST 分析器抽取语义信息
         var formatted = _formatter.Format(sql);
         var cleaned   = _formatter.RemoveComments(formatted);
         cleaned       = _formatter.RemoveInvisibleChars(cleaned);
-        var opType    = DetectOpType(cleaned);
-        var tables    = ExtractTableNames(cleaned, opType);
+
+        var ast = SqlAstAnalyzer.Analyze(cleaned);
 
         return Task.FromResult(PluginOutput.Ok(new ParsedSqlResult
         {
-            OriginalSql     = sql,
-            CleanedSql      = cleaned,
-            OperationType   = opType,
-            TableNames      = tables,
-            HasWhereClause  = ContainsKeyword(cleaned, "WHERE")
+            OriginalSql      = sql,
+            CleanedSql       = cleaned,
+            OperationType    = ast.OperationType,
+            TableNames       = ast.AllTables.Count > 0 ? ast.AllTables : new List<string> { ast.PrimaryTable }.Where(s => !string.IsNullOrEmpty(s)).ToList(),
+            HasWhereClause   = ast.HasWhereClause,
+            PrimaryTable     = ast.PrimaryTable,
+            SetColumns       = ast.SetColumns,
+            InsertColumns    = ast.InsertColumns,
+            HasJoin          = ast.HasJoin,
+            HasUnion         = ast.HasUnion,
+            HasSubquery      = ast.HasSubquery,
         }));
     }
 
@@ -94,6 +101,12 @@ public class ParsedSqlResult
     public SqlOperationType OperationType { get; set; }
     public List<string> TableNames { get; set; } = new();
     public bool HasWhereClause { get; set; }
+    public string PrimaryTable { get; set; } = "";
+    public List<string> SetColumns { get; set; } = new();
+    public List<string> InsertColumns { get; set; } = new();
+    public bool HasJoin { get; set; }
+    public bool HasUnion { get; set; }
+    public bool HasSubquery { get; set; }
 }
 
 public sealed class SqlFormatter

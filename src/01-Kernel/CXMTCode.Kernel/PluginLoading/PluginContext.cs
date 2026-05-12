@@ -2,7 +2,11 @@ using CXMTCode.Kernel.Contracts.Interfaces;
 
 namespace CXMTCode.Kernel.PluginLoading;
 
-/// <summary>插件执行上下文 - 由 PluginHost 在调度时构造</summary>
+/// <summary>
+/// 插件执行上下文 - 由 PluginHost 在调度时构造。
+/// 大多数依赖直接注入；<see cref="UserContext"/> 通过工厂延迟解析，避免
+/// 在启动 / 单例作用域中触发 scoped 服务解析异常。
+/// </summary>
 public sealed class PluginContext : IPluginContext
 {
     public IPermissionChecker PermissionChecker { get; }
@@ -10,9 +14,18 @@ public sealed class PluginContext : IPluginContext
     public IKimiTaskScheduler TaskScheduler { get; }
     public IDistributedTransaction Transaction { get; }
     public ISystemConfigService Configuration { get; }
-    public IUserContext UserContext { get; }
     public IRolePermissionProvider RolePermissionProvider { get; }
     public string TraceId { get; }
+
+    private readonly Func<IUserContext> _userContextResolver;
+    public IUserContext UserContext
+    {
+        get
+        {
+            try { return _userContextResolver(); }
+            catch { return CXMTCode.Kernel.Security.UserContext.Anonymous(); }
+        }
+    }
 
     private readonly Dictionary<Type, object> _pluginConfigs = new();
 
@@ -22,7 +35,7 @@ public sealed class PluginContext : IPluginContext
         IKimiTaskScheduler taskScheduler,
         IDistributedTransaction transaction,
         ISystemConfigService configuration,
-        IUserContext userContext,
+        Func<IUserContext> userContextResolver,
         IRolePermissionProvider rolePermissionProvider,
         string? traceId = null)
     {
@@ -31,7 +44,7 @@ public sealed class PluginContext : IPluginContext
         TaskScheduler = taskScheduler;
         Transaction = transaction;
         Configuration = configuration;
-        UserContext = userContext;
+        _userContextResolver = userContextResolver;
         RolePermissionProvider = rolePermissionProvider;
         TraceId = traceId ?? Guid.NewGuid().ToString("N");
     }

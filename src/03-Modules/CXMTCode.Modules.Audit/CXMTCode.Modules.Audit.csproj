@@ -7,4 +7,7 @@
     <ProjectReference Include="..\..\01-Kernel\CXMTCode.Kernel\CXMTCode.Kernel.csproj" />
     <ProjectReference Include="..\..\05-Infrastructure\CXMTCode.Infrastructure.Db\CXMTCode.Infrastructure.Db.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="QuestPDF" Version="2024.10.0" />
+  </ItemGroup>
 </Project>

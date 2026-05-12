@@ -20,8 +20,8 @@ dist/
 .vscode/
 
 # Dev DB
-db/*.db
-db/*.db-journal
+**/*.db
+**/*.db-journal
 
 # Logs
 *.log

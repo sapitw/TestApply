@@ -1,105 +1,202 @@
 using System.Security.Cryptography;
 using System.Text;
+using Org.BouncyCastle.Asn1.GM;
+using Org.BouncyCastle.Asn1.X9;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Digests;
+using Org.BouncyCastle.Crypto.Engines;
+using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Crypto.Modes;
+using Org.BouncyCastle.Crypto.Paddings;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Crypto.Signers;
+using Org.BouncyCastle.Math;
+using Org.BouncyCastle.Security;
 
 namespace CXMTCode.Infrastructure.Crypto;
 
 /// <summary>
-/// 国密算法辅助类（占位实现）。
-/// <para>
-/// TODO：等保 2.0 / 国密合规需求下，需替换为真正的 GMSSL 实现：
-///   - SM2：椭圆曲线公钥密码（签名/验签/加密）
-///   - SM3：哈希算法（256-bit）
-///   - SM4：分组对称密码（128-bit 分组）
-/// </para>
-/// <para>
-/// 当前以 .NET 内置算法占位以保证 dotnet build 通过：
-///   SM3  → SHA256
-///   SM4  → AES-128-CBC
-///   SM2  → ECDsa(NIST P-256)
-/// 占位实现仅供开发期跑通流程，不可在生产使用。
-/// </para>
+/// 国密算法辅助类 - 基于 BouncyCastle 的真实 SM2/SM3/SM4 实现。
+/// <para>SM2：256 位椭圆曲线（GMT 0003.2-2012），公钥加密 + 签名</para>
+/// <para>SM3：256 位密码杂凑（GMT 0004-2012）</para>
+/// <para>SM4：128 位分组对称加密（GMT 0002-2012），CBC + PKCS7</para>
 /// </summary>
 public static class CryptoHelper
 {
-    public const string DefaultKey16 = "CXMTCodeSM4Key16";
-    public const string DefaultIv16  = "CXMTCodeSM4Iv016";
+    public const string DefaultKey16 = "CXMTCodeSm4Key!!";   // 16 byte
+    public const string DefaultIv16  = "CXMTCodeSm4Iv0!!";   // 16 byte
 
     public static byte[] DefaultKey => Encoding.UTF8.GetBytes(DefaultKey16);
     public static byte[] DefaultIv  => Encoding.UTF8.GetBytes(DefaultIv16);
 
-    /// <summary>SM3 哈希（占位：SHA256）</summary>
+    private static readonly X9ECParameters Sm2Curve = GMNamedCurves.GetByName("sm2p256v1");
+    private static readonly ECDomainParameters Sm2Domain =
+        new(Sm2Curve.Curve, Sm2Curve.G, Sm2Curve.N, Sm2Curve.H);
+
+    // ============ SM3 ============
+
+    /// <summary>SM3 杂凑（输出 64 hex 字符 = 256 位）</summary>
     public static string ComputeSm3Hash(string input)
     {
-        using var sha = SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(input ?? string.Empty);
-        return Convert.ToHexString(sha.ComputeHash(bytes));
+        var data = Encoding.UTF8.GetBytes(input ?? string.Empty);
+        var digest = new SM3Digest();
+        digest.BlockUpdate(data, 0, data.Length);
+        var result = new byte[digest.GetDigestSize()];
+        digest.DoFinal(result, 0);
+        return Convert.ToHexString(result);
     }
 
-    /// <summary>SM3 哈希（带盐值）</summary>
     public static string ComputeSm3HashWithSalt(string input, string salt) =>
         ComputeSm3Hash($"{salt}:{input}");
 
-    /// <summary>SM4 加密（占位：AES-128-CBC）</summary>
+    // ============ SM4 ============
+
+    /// <summary>SM4-CBC-PKCS7 加密，返回 Base64</summary>
     public static string EncryptSm4(string plainText, byte[]? key = null, byte[]? iv = null)
     {
-        key ??= DefaultKey;
-        iv  ??= DefaultIv;
-        using var aes = Aes.Create();
-        aes.Key = key.Length == 16 ? key : SHA256.HashData(key).AsSpan(0, 16).ToArray();
-        aes.IV  = iv.Length  == 16 ? iv  : SHA256.HashData(iv ).AsSpan(0, 16).ToArray();
-        aes.Mode = CipherMode.CBC;
-        aes.Padding = PaddingMode.PKCS7;
-        using var enc = aes.CreateEncryptor();
-        var input  = Encoding.UTF8.GetBytes(plainText ?? string.Empty);
-        var output = enc.TransformFinalBlock(input, 0, input.Length);
-        return Convert.ToBase64String(output);
+        if (plainText is null) return string.Empty;
+        return Convert.ToBase64String(Sm4Crypt(
+            true,
+            Encoding.UTF8.GetBytes(plainText),
+            NormalizeKey(key ?? DefaultKey),
+            NormalizeIv(iv ?? DefaultIv)));
     }
 
-    /// <summary>SM4 解密（占位：AES-128-CBC）</summary>
+    /// <summary>SM4-CBC-PKCS7 解密，输入 Base64</summary>
     public static string DecryptSm4(string cipherText, byte[]? key = null, byte[]? iv = null)
     {
         if (string.IsNullOrEmpty(cipherText)) return string.Empty;
-        key ??= DefaultKey;
-        iv  ??= DefaultIv;
-        using var aes = Aes.Create();
-        aes.Key = key.Length == 16 ? key : SHA256.HashData(key).AsSpan(0, 16).ToArray();
-        aes.IV  = iv.Length  == 16 ? iv  : SHA256.HashData(iv ).AsSpan(0, 16).ToArray();
-        aes.Mode = CipherMode.CBC;
-        aes.Padding = PaddingMode.PKCS7;
-        using var dec = aes.CreateDecryptor();
-        var input  = Convert.FromBase64String(cipherText);
-        var output = dec.TransformFinalBlock(input, 0, input.Length);
-        return Encoding.UTF8.GetString(output);
+        var plain = Sm4Crypt(
+            false,
+            Convert.FromBase64String(cipherText),
+            NormalizeKey(key ?? DefaultKey),
+            NormalizeIv(iv ?? DefaultIv));
+        return Encoding.UTF8.GetString(plain);
     }
 
-    /// <summary>SM2 签名（占位：ECDsa P-256，私钥 PKCS#8 DER）</summary>
-    public static string SignSm2(string data, byte[] privateKeyPkcs8)
+    private static byte[] Sm4Crypt(bool forEncryption, byte[] data, byte[] key, byte[] iv)
     {
-        using var ec = ECDsa.Create();
-        ec.ImportPkcs8PrivateKey(privateKeyPkcs8, out _);
-        var sig = ec.SignData(Encoding.UTF8.GetBytes(data ?? string.Empty), HashAlgorithmName.SHA256);
-        return Convert.ToBase64String(sig);
+        var engine = new SM4Engine();
+        var cipher = new PaddedBufferedBlockCipher(new CbcBlockCipher(engine), new Pkcs7Padding());
+        cipher.Init(forEncryption, new ParametersWithIV(new KeyParameter(key), iv));
+        var output = new byte[cipher.GetOutputSize(data.Length)];
+        var len = cipher.ProcessBytes(data, 0, data.Length, output, 0);
+        len += cipher.DoFinal(output, len);
+        if (len == output.Length) return output;
+        var trimmed = new byte[len];
+        Array.Copy(output, trimmed, len);
+        return trimmed;
     }
 
-    /// <summary>SM2 验签（占位：ECDsa P-256，公钥 SubjectPublicKeyInfo DER）</summary>
-    public static bool VerifySm2(string data, string base64Signature, byte[] publicKeySpki)
+    private static byte[] NormalizeKey(byte[] key)
+    {
+        if (key.Length == 16) return key;
+        var fixed16 = new byte[16];
+        Array.Copy(SHA256.HashData(key), fixed16, 16);
+        return fixed16;
+    }
+    private static byte[] NormalizeIv(byte[] iv)
+    {
+        if (iv.Length == 16) return iv;
+        var fixed16 = new byte[16];
+        Array.Copy(SHA256.HashData(iv), fixed16, 16);
+        return fixed16;
+    }
+
+    // ============ SM2 ============
+
+    /// <summary>SM2 签名（默认 userId='1234567812345678'，符合 GMT 0009-2012）</summary>
+    public static string SignSm2(string data, byte[] privateKeyDer)
+    {
+        var d = new BigInteger(1, ExtractScalar(privateKeyDer));
+        var privKey = new ECPrivateKeyParameters(d, Sm2Domain);
+        var signer  = new SM2Signer();
+        signer.Init(true, new ParametersWithRandom(privKey, new SecureRandom()));
+        var msg = Encoding.UTF8.GetBytes(data ?? string.Empty);
+        signer.BlockUpdate(msg, 0, msg.Length);
+        return Convert.ToBase64String(signer.GenerateSignature());
+    }
+
+    /// <summary>SM2 验签</summary>
+    public static bool VerifySm2(string data, string base64Signature, byte[] publicKeyDer)
     {
         try
         {
-            using var ec = ECDsa.Create();
-            ec.ImportSubjectPublicKeyInfo(publicKeySpki, out _);
-            return ec.VerifyData(
-                Encoding.UTF8.GetBytes(data ?? string.Empty),
-                Convert.FromBase64String(base64Signature),
-                HashAlgorithmName.SHA256);
+            var q = Sm2Curve.Curve.DecodePoint(ExtractPublicPoint(publicKeyDer));
+            var pubKey = new ECPublicKeyParameters(q, Sm2Domain);
+            var signer = new SM2Signer();
+            signer.Init(false, pubKey);
+            var msg = Encoding.UTF8.GetBytes(data ?? string.Empty);
+            signer.BlockUpdate(msg, 0, msg.Length);
+            return signer.VerifySignature(Convert.FromBase64String(base64Signature));
         }
         catch { return false; }
     }
 
-    /// <summary>生成一对 SM2 占位密钥（ECDsa P-256）</summary>
+    /// <summary>生成 SM2 密钥对（私钥 32 字节大端 + 公钥 65 字节未压缩 04||X||Y）</summary>
     public static (byte[] PrivateKey, byte[] PublicKey) GenerateSm2KeyPair()
     {
-        using var ec = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        return (ec.ExportPkcs8PrivateKey(), ec.ExportSubjectPublicKeyInfo());
+        var generator = new ECKeyPairGenerator();
+        generator.Init(new ECKeyGenerationParameters(Sm2Domain, new SecureRandom()));
+        var pair = generator.GenerateKeyPair();
+        var priv = (ECPrivateKeyParameters)pair.Private;
+        var pub  = (ECPublicKeyParameters)pair.Public;
+        return (BigIntegerTo32(priv.D), pub.Q.GetEncoded(false));
+    }
+
+    private static byte[] BigIntegerTo32(BigInteger n)
+    {
+        var raw = n.ToByteArrayUnsigned();
+        if (raw.Length == 32) return raw;
+        var fixed32 = new byte[32];
+        Array.Copy(raw, 0, fixed32, 32 - raw.Length, raw.Length);
+        return fixed32;
+    }
+
+    /// <summary>使用 SM2 加密任意明文（输出 C1||C3||C2 Base64）</summary>
+    public static string EncryptSm2(string plainText, byte[] publicKeyDer)
+    {
+        var q = Sm2Curve.Curve.DecodePoint(ExtractPublicPoint(publicKeyDer));
+        var pubKey = new ECPublicKeyParameters(q, Sm2Domain);
+        var engine = new SM2Engine(SM2Engine.Mode.C1C3C2);
+        engine.Init(true, new ParametersWithRandom(pubKey, new SecureRandom()));
+        var input = Encoding.UTF8.GetBytes(plainText ?? string.Empty);
+        var output = engine.ProcessBlock(input, 0, input.Length);
+        return Convert.ToBase64String(output);
+    }
+
+    /// <summary>使用 SM2 解密</summary>
+    public static string DecryptSm2(string cipherBase64, byte[] privateKeyDer)
+    {
+        var d = new BigInteger(1, ExtractScalar(privateKeyDer));
+        var privKey = new ECPrivateKeyParameters(d, Sm2Domain);
+        var engine = new SM2Engine(SM2Engine.Mode.C1C3C2);
+        engine.Init(false, privKey);
+        var input = Convert.FromBase64String(cipherBase64);
+        var output = engine.ProcessBlock(input, 0, input.Length);
+        return Encoding.UTF8.GetString(output);
+    }
+
+    private static byte[] ExtractScalar(byte[] bytes)
+    {
+        if (bytes.Length == 32) return bytes;
+        var s = new byte[32];
+        Array.Copy(bytes, bytes.Length - 32, s, 0, 32);
+        return s;
+    }
+
+    private static byte[] ExtractPublicPoint(byte[] bytes)
+    {
+        if (bytes.Length == 65 && bytes[0] == 0x04) return bytes;
+        if (bytes.Length == 64)
+        {
+            var encoded = new byte[65];
+            encoded[0] = 0x04;
+            Array.Copy(bytes, 0, encoded, 1, 64);
+            return encoded;
+        }
+        var pt = new byte[65];
+        Array.Copy(bytes, bytes.Length - 65, pt, 0, 65);
+        return pt;
     }
 }

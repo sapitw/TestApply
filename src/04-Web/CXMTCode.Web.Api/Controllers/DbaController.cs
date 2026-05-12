@@ -16,6 +16,7 @@ public sealed class DbaController : ControllerBase
     private readonly TableAccessRepository _access;
     private readonly DeleteTemplateRepository _templates;
     private readonly WhitelistRuleRepository _rules;
+    private readonly TablePermissionRepository _permissions;
     private readonly IAuditLogger _audit;
     private readonly IUserContext _user;
 
@@ -23,10 +24,12 @@ public sealed class DbaController : ControllerBase
         TableAccessRepository access,
         DeleteTemplateRepository templates,
         WhitelistRuleRepository rules,
+        TablePermissionRepository permissions,
         IAuditLogger audit,
         IUserContext user)
     {
         _access = access; _templates = templates; _rules = rules;
+        _permissions = permissions;
         _audit = audit; _user = user;
     }
 
@@ -90,6 +93,47 @@ public sealed class DbaController : ControllerBase
     public async Task<Result<bool>> DeleteRule(string id)
     {
         var n = await _rules.DeleteAsync(id);
+        return Result<bool>.Ok(n > 0);
+    }
+
+    // ============ 用户表级授权 ============
+
+    [HttpGet("user-grants")]
+    public async Task<Result<IReadOnlyList<TablePermissionRecord>>> ListGrants([FromQuery] string accessId)
+    {
+        if (string.IsNullOrWhiteSpace(accessId))
+            return Result<IReadOnlyList<TablePermissionRecord>>.Fail("accessId 必传");
+        var rows = await _permissions.ListByAccessAsync(accessId);
+        return Result<IReadOnlyList<TablePermissionRecord>>.Ok(rows);
+    }
+
+    [HttpPost("user-grants")]
+    public async Task<Result<TablePermissionRecord>> Grant([FromBody] TablePermissionRecord r)
+    {
+        r.PermissionId = Guid.NewGuid().ToString("N");
+        r.GrantedBy    = _user.UserId.ToString();
+        await _permissions.GrantAsync(r);
+        await _audit.WriteAsync(_user.UserId, _user.UserName, _user.Role,
+            "TablePermission.Grant",
+            $"授予用户 {r.UserId} 表权限 SELECT={r.AllowSelect} INSERT={r.AllowInsert} UPDATE={r.AllowUpdate} DELETE={r.AllowDelete}",
+            clientIp: _user.ClientIp);
+        return Result<TablePermissionRecord>.Ok(r);
+    }
+
+    [HttpPut("user-grants/{id}")]
+    public async Task<Result<bool>> UpdateGrant(string id, [FromBody] TablePermissionRecord r)
+    {
+        r.PermissionId = id;
+        var n = await _permissions.UpdateAsync(r);
+        return Result<bool>.Ok(n > 0);
+    }
+
+    [HttpDelete("user-grants/{id}")]
+    public async Task<Result<bool>> RevokeGrant(string id)
+    {
+        var n = await _permissions.RevokeAsync(id);
+        await _audit.WriteAsync(_user.UserId, _user.UserName, _user.Role,
+            "TablePermission.Revoke", $"撤销授权 {id}", clientIp: _user.ClientIp);
         return Result<bool>.Ok(n > 0);
     }
 }

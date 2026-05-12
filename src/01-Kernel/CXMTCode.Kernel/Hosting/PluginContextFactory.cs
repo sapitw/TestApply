@@ -6,7 +6,7 @@ namespace CXMTCode.Kernel.Hosting;
 
 /// <summary>
 /// 插件上下文工厂 - 每次调用插件时构造一份独立的 <see cref="IPluginContext"/>。
-/// 通过 <see cref="IServiceProvider"/> 解析当前请求的 <see cref="IUserContext"/> 等服务。
+/// UserContext 通过工厂延迟解析（Func&lt;IUserContext&gt;），避免在单例 / 启动期触发 scoped 解析异常。
 /// </summary>
 public sealed class PluginContextFactory
 {
@@ -21,7 +21,7 @@ public sealed class PluginContextFactory
             _provider.GetRequiredService<IKimiTaskScheduler>(),
             _provider.GetRequiredService<IDistributedTransaction>(),
             _provider.GetRequiredService<ISystemConfigService>(),
-            _provider.GetRequiredService<IUserContext>(),
+            () => _provider.GetService<IUserContext>() ?? CXMTCode.Kernel.Security.UserContext.Anonymous(),
             _provider.GetRequiredService<IRolePermissionProvider>(),
             traceId);
     }

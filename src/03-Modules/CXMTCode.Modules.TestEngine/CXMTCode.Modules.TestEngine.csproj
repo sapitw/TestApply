@@ -5,5 +5,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\01-Kernel\CXMTCode.Kernel.Contracts\CXMTCode.Kernel.Contracts.csproj" />
     <ProjectReference Include="..\..\02-Plugins\CXMTCode.Plugins.TestEngine\CXMTCode.Plugins.TestEngine.csproj" />
+    <ProjectReference Include="..\..\05-Infrastructure\CXMTCode.Infrastructure.Db\CXMTCode.Infrastructure.Db.csproj" />
   </ItemGroup>
 </Project>

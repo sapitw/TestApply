@@ -160,9 +160,20 @@ sqlplus / as sysdba @db/oracle-init.sql
     "Audience": "CXMTCodeReact",
     "ExpirationMinutes": 480
   },
-  "Frontend": { "Url": "https://cxmtcode.your-domain.com" }
+  "Frontend": { "Url": "https://cxmtcode.your-domain.com" },
+  "Smtp": {
+    "Enabled": true,
+    "Host": "smtp.your-domain.com",
+    "Port": 465,
+    "UseSsl": true,
+    "Username": "alert@your-domain.com",
+    "Password": "...",
+    "From": "CXMTCode 通知 <alert@your-domain.com>"
+  }
 }
 ```
+
+> **新增**：`Smtp` 节段配置 D7 邮件通知。`Enabled=false`（默认）时邮件以 DryRun 模式仅记入日志，便于联调。
 
 > **接入 Oracle 提醒**：当前仓库内的 `SystemDbContext` 默认通过 `SqliteSystemDbContext` 实现，生产 Oracle 需补一个 `OracleSystemDbContext`（使用 `Oracle.ManagedDataAccess.Core`）并在 `Program.cs` 注册：
 >
@@ -390,6 +401,43 @@ docker run --rm -v cxmtcode_db:/data -v $(pwd):/b alpine tar xzf /b/db-YYYY-MM-D
 ```
 
 ---
+
+## 7.5 21CFR Part11 合规报告导出
+
+SysAdmin 可在 UI「系统管理 → 自检报告」选择时间区间，下载 HTML 或 PDF 格式的合规自检报告。报告包含：
+
+- 报告期内全部操作的聚合统计（按 OperationType / Result）
+- SM3 哈希链抽样校验（每 50 条抽 1 条，最多 20 条）
+- 操作明细前 500 条（HTML 全量、PDF 前 200 条）
+
+也可直接调用 API：
+
+```bash
+# HTML
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/audit/compliance-report/html?from=2026-04-01T00:00:00Z&to=2026-05-01T00:00:00Z" \
+  -o compliance.html
+
+# PDF
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/audit/compliance-report/pdf?from=2026-04-01T00:00:00Z&to=2026-05-01T00:00:00Z" \
+  -o compliance.pdf
+```
+
+建议定期（每月）由运维归档一份合规报告至独立存储。
+
+## 7.6 C4 Db2 真实驱动接入（生产可选）
+
+仓库默认的 `CXMTCode.Plugins.DB2_115.Db2Adapter` 是占位实现（保留 HADR STANDBY 安全校验逻辑）。如需接入真实 Db2，在生产 Docker 镜像中执行：
+
+```dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+RUN apt-get update && apt-get install -y libxml2 libstdc++6
+ENV IBM_DB_HOME=/opt/ibm/db2/clidriver
+COPY clidriver /opt/ibm/db2/clidriver
+```
+
+并在 `Db2Adapter.cs` 中按 `OracleAdapter.cs` 的实现模式接入 `IBM.Data.Db2` 或 `Net.IBM.Data.Db2` 包。
 
 ## 八、监控 / 健康检查
 

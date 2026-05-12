@@ -111,22 +111,23 @@ public class SqlExecutionPlugin : PluginBase
 /// <summary>D5 回滚 SQL 生成插件 - 基于备份表反向生成 DML</summary>
 public class RollbackSqlGeneratorPlugin : PluginBase
 {
-    private readonly DatabaseAdapterFactory _factory;
-    public RollbackSqlGeneratorPlugin(DatabaseAdapterFactory factory) { _factory = factory; }
-    public RollbackSqlGeneratorPlugin() { _factory = new DatabaseAdapterFactory(); }
-
     public override string PluginId => "CXMTCode.Plugins.Common.RollbackGenerator";
     public override string DisplayName => "D5 回滚 SQL 生成";
     public override string Version => "3.0.0";
 
-    public override async Task<PluginOutput> ExecuteAsync(PluginInput input)
+    public override Task<PluginOutput> ExecuteAsync(PluginInput input)
     {
-        var sql     = input.GetParameter<string>("sql") ?? "";
-        var dbType  = input.GetParameter<DatabaseType>("databaseType");
-        var connStr = input.GetParameter<string>("connectionString") ?? "";
-        using var adapter = _factory.Create(dbType);
-        var result = await adapter.GenerateRollbackSqlAsync(sql, connStr);
-        return PluginOutput.Ok(result);
+        var ctx = new Rollback.GenerationContext
+        {
+            OriginalSql        = input.GetParameter<string>("sql") ?? "",
+            TargetTable        = input.GetParameter<string>("targetTable") ?? "",
+            BackupTable        = input.GetParameter<string>("backupTable") ?? "",
+            DatabaseType       = input.GetParameter<DatabaseType>("databaseType"),
+            PrimaryKeyColumns  = input.GetParameter<List<string>>("primaryKeyColumns"),
+            AllColumns         = input.GetParameter<List<string>>("allColumns")
+        };
+        var result = Rollback.RollbackSqlGenerator.Generate(ctx);
+        return Task.FromResult(PluginOutput.Ok(result));
     }
 }
 
@@ -153,18 +154,34 @@ public class RollbackExecutionPlugin : PluginBase
     }
 }
 
-/// <summary>D7 执行结果通知插件 - 写审计 + 异步推送邮件 / 站内信</summary>
+/// <summary>D7 执行结果通知插件 - 通过 EmailNotificationService 推送邮件（可配置）</summary>
 public class ExecutionNotificationPlugin : PluginBase
 {
+    private readonly Notification.EmailNotificationService? _email;
+    public ExecutionNotificationPlugin(Notification.EmailNotificationService email) { _email = email; }
+    public ExecutionNotificationPlugin() { _email = null; }
+
     public override string PluginId => "CXMTCode.Plugins.Common.ExecutionNotification";
     public override string DisplayName => "D7 执行结果通知";
     public override string Version => "3.0.0";
 
-    public override Task<PluginOutput> ExecuteAsync(PluginInput input)
+    public override async Task<PluginOutput> ExecuteAsync(PluginInput input)
     {
         var subject = input.GetParameter<string>("subject") ?? "执行结果";
         var content = input.GetParameter<string>("content") ?? "";
-        // TODO：接入企业邮件 / 站内信 / 钉钉 webhook
-        return Task.FromResult(PluginOutput.Ok(new { Sent = true, Subject = subject, Content = content }));
+        var recipients = input.GetParameter<List<string>>("recipients") ?? new();
+
+        if (_email is null || recipients.Count == 0)
+            return PluginOutput.Ok(new { Sent = false, Reason = "EmailService 未注入或收件人为空", Subject = subject });
+
+        var result = await _email.SendAsync(recipients, subject, content);
+        return PluginOutput.Ok(new
+        {
+            Sent     = result.Success,
+            Skipped  = result.Skipped,
+            Message  = result.Message,
+            Subject  = subject,
+            Receivers = recipients.Count
+        });
     }
 }
