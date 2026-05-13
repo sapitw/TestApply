@@ -6,17 +6,17 @@
 
 ## 一、部署模式速查
 
-| 模式 | 系统 DB | 业务 DB | 适用场景 |
-| --- | --- | --- | --- |
-| **A. 本地开发** | SQLite（自动创建） | 可空 / 测试库 | 单机调试、UI 演示 |
-| **B. Docker 单节点** | SQLite（容器卷） | 测试 Oracle / MSSQL | POC、内网试运行 |
-| **C. 生产 - Oracle 系统库** | Oracle 19C Enterprise | Oracle / MSSQL / MySQL / DB2 | 企业正式部署 |
+| 模式 | 宿主 | 系统 DB | 业务 DB | 适用场景 |
+| --- | --- | --- | --- | --- |
+| **A. 本地开发** | dotnet run + vite dev | SQLite（自动创建） | 可空 / 测试库 | 开发调试、UI 演示 |
+| **B. Windows Server + IIS（SQLite）** | IIS 10+ + ASP.NET Core Module | SQLite（IIS 站点目录） | 测试 Oracle / MSSQL | 内网 POC、试运行 |
+| **C. Windows Server + IIS（Oracle）** | IIS 10+ + ASP.NET Core Module | Oracle 19C Enterprise | Oracle / MSSQL / MySQL / DB2 | 企业正式生产部署 |
 
 ---
 
 ## 二、模式 A：本地开发（最快上手）
 
-> 适合：开发调试、UI 演示。无需 Docker，无需 Oracle。
+> 适合：开发调试、UI 演示。仅需 .NET 8 SDK + Node 20+，无需 IIS / Oracle。
 
 ### 2.1 环境准备
 
@@ -66,54 +66,124 @@ npm run dev
 
 ---
 
-## 三、模式 B：Docker 单节点
+## 三、模式 B：Windows Server + IIS（SQLite 系统库）
 
-> 适合：内网试运行、POC。一键起前后端 + SQLite 系统库。
+> 适合：内网 POC、试运行、不依赖外部 DB 的轻量部署。
 
-### 3.1 启动
+### 3.1 Windows Server 前置环境
 
-```bash
+| 组件 | 版本 | 安装方式 |
+| --- | --- | --- |
+| Windows Server | 2019 / 2022 | - |
+| IIS | 10+ | 服务器管理器 → 添加角色 → Web 服务器 (IIS) |
+| .NET 8 Hosting Bundle | 8.0+ | 下载 https://dotnet.microsoft.com/download/dotnet/8.0 → Hosting Bundle，**装完后必须重启 IIS（iisreset）** |
+| URL Rewrite Module | 2.x | https://www.iis.net/downloads/microsoft/url-rewrite |
+| Application Request Routing (ARR) | 3.0 | https://www.iis.net/downloads/microsoft/application-request-routing （仅当 IIS 反向代理 /api 时） |
+| Node.js（可选） | 20+ | 仅在 Windows Server 上本地构建时需要；CI/构建机已构建可省略 |
+| .NET 8 SDK（可选） | 8.0+ | 仅当现场构建时；CI 已 publish 可省略 |
+
+ARR 安装后须打开：`IIS Manager → 服务器节点 → Application Request Routing Cache → Server Proxy Settings → ✅ Enable proxy`
+
+### 3.2 构建发布包
+
+在构建机或 Windows Server 本机：
+
+```powershell
 git clone <仓库地址> CXMTCode
 cd CXMTCode
-docker compose up --build -d
+.\build\publish.ps1
+# 产物：
+#   publish\api\   - ASP.NET Core publish（含 web.config / appsettings.json / logs/）
+#   publish\web\   - vite build（含 web.config / index.html / assets/）
 ```
 
-访问：
-- 前端：<http://localhost>
-- 后端：<http://localhost:8080>
-- Swagger：<http://localhost:8080/swagger>
+`build/publish.ps1` 内部依次：`dotnet restore → build → test → publish -r win-x64 → npm run build`。
 
-### 3.2 修改配置
+### 3.3 部署到 IIS（一键脚本）
 
-`docker-compose.yml` 中 `cxmtcode-api.environment` 节：
+把 `publish/` 复制到 Windows Server（例如 `C:\inetpub\cxmtcode\`），然后在**管理员 PowerShell**中：
 
-```yaml
-environment:
-  ConnectionStrings__SystemDb: "Data Source=/data/cxmtcode-prod.db"
-  JwtSettings__SecretKey: "请修改成 32 字符以上的随机串"
-  JwtSettings__Issuer: "CXMTCode"
-  JwtSettings__Audience: "CXMTCodeReact"
-  JwtSettings__ExpirationMinutes: "480"
+```powershell
+.\build\install-iis.ps1
+# 默认行为：
+#   - 创建 AppPool: CXMTCodeApiPool / CXMTCodeWebPool（均设为 No Managed Code）
+#   - 创建 Site:    cxmtcode-api（端口 8080）→ publish\api
+#                   cxmtcode-web（端口 80）  → publish\web
+#   - 授予 IIS_IUSRS 对 publish\api 的 读/写 权限（日志 + SQLite 文件）
+#   - 启动两个站点
+
+# 自定义路径与端口：
+.\build\install-iis.ps1 -ApiPath D:\Apps\cxmt-api -WebPath D:\Apps\cxmt-web -ApiPort 8181 -WebPort 8080
 ```
 
-修改后：
+完成后访问：
+- 前端 UI：<http://localhost/>
+- 后端 API + Swagger：<http://localhost:8080/swagger>
+- 默认账号：`admin / admin@123`（首次登录后请立刻修改密码）
 
-```bash
-docker compose down && docker compose up -d
+### 3.4 手动部署（不使用脚本）
+
+如不想用 `install-iis.ps1`，等价的 IIS Manager 操作：
+
+1. **应用程序池**
+   - 名称：`CXMTCodeApiPool`，.NET CLR 版本：**无托管代码**，启动模式：**AlwaysRunning**
+   - 名称：`CXMTCodeWebPool`，同上
+2. **站点 - 后端**
+   - 物理路径：`C:\inetpub\cxmtcode\api`
+   - 应用程序池：`CXMTCodeApiPool`
+   - 绑定：HTTP 端口 `8080`
+3. **站点 - 前端**
+   - 物理路径：`C:\inetpub\cxmtcode\web`
+   - 应用程序池：`CXMTCodeWebPool`
+   - 绑定：HTTP 端口 `80`
+4. **权限**：右键 `publish\api` → 属性 → 安全 → 添加 `IIS_IUSRS`，授予「修改」（写 logs/ 与 db/）
+5. **启动**：两个站点都点「启动」
+
+### 3.5 修改配置
+
+`publish\api\appsettings.json`（或新增 `appsettings.Production.json`）：
+
+```json
+{
+  "ConnectionStrings": {
+    "SystemDb": "Data Source=db\\cxmtcode-prod.db"
+  },
+  "JwtSettings": {
+    "SecretKey": "请改成至少 32 字符的高熵随机串",
+    "Issuer": "CXMTCode",
+    "Audience": "CXMTCodeReact",
+    "ExpirationMinutes": 480
+  },
+  "Smtp": {
+    "Enabled": false
+  }
+}
 ```
 
-### 3.3 持久化
+修改后执行：
 
-`cxmtcode_db` 命名卷持久化 SQLite 文件。备份：
-
-```bash
-docker run --rm -v cxmtcode_db:/data -v $(pwd):/backup alpine \
-  tar czf /backup/cxmtcode-db-$(date +%Y%m%d).tar.gz -C /data .
+```powershell
+Restart-WebAppPool -Name CXMTCodeApiPool
 ```
+
+> SQLite 模式下 DB 文件位于 `publish\api\db\cxmtcode-prod.db`，备份只需复制该文件即可。
+
+### 3.6 反向代理工作原理
+
+`publish\web\web.config` 已内置 URL Rewrite 规则：
+
+| 请求 | 行为 |
+| --- | --- |
+| `GET /api/foo` | ARR 反向代理到 `http://localhost:8080/api/foo` |
+| `GET /swagger/*` | 反向代理到后端 swagger |
+| `GET /change/list` 等 SPA 路由 | 回退到 `/index.html`（不存在的物理文件） |
+| `GET /assets/*.js` | IIS 直接返回静态文件 |
+
+这样前端站点（80）和后端站点（8080）通过 IIS 内部 ARR 串联，外部仅暴露 80 端口即可。
 
 ---
 
-## 四、模式 C：生产部署（Oracle 19C 系统库）
+## 四、模式 C：Windows Server + IIS + Oracle 19C 系统库（生产推荐）
 
 > 适合：等保 2.0 合规、企业正式部署。
 
@@ -122,12 +192,16 @@ docker run --rm -v cxmtcode_db:/data -v $(pwd):/backup alpine \
 ```
 1. 安装 / 准备 Oracle 19C Enterprise
 2. 执行 db/oracle-init.sql 建库 + 建用户 CXMT_PLATFORM
-3. 修改 appsettings.Production.json 的 ConnectionStrings:SystemDb
-4. 修改 SecretKey + Issuer
-5. 后端：dotnet publish / docker
-6. 前端：npm run build → Nginx 静态托管 / Docker
-7. 反向代理（Nginx / 网关）配置
-8. 首次登录后立刻修改 admin 密码
+3. 在 Windows Server 安装 IIS + .NET 8 Hosting Bundle + URL Rewrite + ARR
+4. 在构建机执行 .\build\publish.ps1 得到 publish\api 与 publish\web
+5. 复制到 Windows Server 后执行 .\build\install-iis.ps1
+6. 修改 publish\api\appsettings.Production.json：
+     - ConnectionStrings:SystemDb（指向 Oracle）
+     - JwtSettings:SecretKey
+     - Smtp（如启用）
+7. 重启应用程序池：Restart-WebAppPool CXMTCodeApiPool
+8. 配置 HTTPS（IIS 绑定证书）
+9. 首次登录后立刻修改 admin 密码并创建生产 DBA / 用户账号
 ```
 
 ### 4.2 Oracle 19C 系统库初始化
@@ -183,67 +257,72 @@ sqlplus / as sysdba @db/oracle-init.sql
 >
 > 这是规格里明确要求但当前仓库标记为 TODO 的部分。
 
-### 4.4 后端发布
+### 4.4 后端发布到 IIS
 
-```bash
-dotnet publish src/04-Web/CXMTCode.Web.Api -c Release -o /opt/cxmtcode/api --no-restore
-sudo systemctl edit --force --full cxmtcode-api  # 写入 systemd unit
-sudo systemctl enable --now cxmtcode-api
+```powershell
+# 在构建机或本机
+.\build\publish.ps1
+# 把 publish\api 复制到 Windows Server，例如 C:\inetpub\cxmtcode\api
+
+# Windows Server 管理员 PowerShell
+.\build\install-iis.ps1 -ApiPath C:\inetpub\cxmtcode\api -WebPath C:\inetpub\cxmtcode\web
 ```
 
-systemd unit 示例：
+发布后产物目录关键文件：
 
-```ini
-[Unit]
-Description=CXMTCode API
-After=network.target
-
-[Service]
-WorkingDirectory=/opt/cxmtcode/api
-ExecStart=/usr/bin/dotnet /opt/cxmtcode/api/CXMTCode.Web.Api.dll
-Environment=ASPNETCORE_ENVIRONMENT=Production
-Environment=ASPNETCORE_URLS=http://+:8080
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
+```
+publish\api\
+├── CXMTCode.Web.Api.dll      ← 由 ASP.NET Core Module 启动
+├── web.config                ← IIS 配置（已带 hostingModel=inprocess）
+├── appsettings.json          ← 生产配置（请改为 Production 版本）
+├── logs\                     ← stdout / stderr 日志输出目录
+├── db\                       ← SQLite 系统库（Oracle 模式可忽略）
+└── *.dll                     ← 全部依赖
 ```
 
-### 4.5 前端发布
+### 4.5 前端发布到 IIS
 
-```bash
-cd src/04-Web/CXMTCode.Web.React
-npm install
-npm run build
-sudo cp -r dist/* /var/www/cxmtcode/
+构建生成的 `publish\web\` 已包含：
+
+```
+publish\web\
+├── index.html
+├── web.config                ← 已内置：URL Rewrite（SPA 回退 + /api 反向代理）
+└── assets\                   ← vite 切分后的 vendor-react / vendor-antd / vendor-dnd / index 等 chunks
 ```
 
-Nginx 配置：
+直接复制到 Windows Server 站点根目录即可（例如 `C:\inetpub\cxmtcode\web`）。
 
-```nginx
-server {
-  listen 443 ssl http2;
-  server_name cxmtcode.your-domain.com;
+### 4.6 启用 HTTPS（生产必做）
 
-  ssl_certificate     /etc/letsencrypt/live/cxmtcode/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/cxmtcode/privkey.pem;
+在 IIS Manager 中：
 
-  root /var/www/cxmtcode;
-  index index.html;
+1. 服务器证书 → 导入企业证书（PFX）
+2. 选中 `cxmtcode-web` 站点 → 绑定 → 添加：
+   - 类型：`https`
+   - 端口：`443`
+   - SSL 证书：选刚才导入的证书
+3. 在 SSL 设置中勾选「要求 SSL」+「忽略客户端证书」（双向 TLS 需另行配置）
+4. （可选）在 `web.config` 的 `<rewrite><rules>` 顶部加 HTTP → HTTPS 规则：
 
-  location / {
-    try_files $uri /index.html;
-  }
+```xml
+<rule name="ForceHttps" stopProcessing="true">
+  <match url=".*" />
+  <conditions>
+    <add input="{HTTPS}" pattern="off" />
+  </conditions>
+  <action type="Redirect" url="https://{HTTP_HOST}/{R:0}" redirectType="Permanent" />
+</rule>
+```
 
-  location /api/ {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header Authorization $http_authorization;
-  }
-}
+### 4.7 Windows 防火墙
+
+只放行入站 80 / 443（前端），后端 8080 仅本机 ARR 调用，无需对外开放：
+
+```powershell
+New-NetFirewallRule -DisplayName "CXMTCode HTTPS" -Direction Inbound -Protocol TCP -LocalPort 443 -Action Allow
+New-NetFirewallRule -DisplayName "CXMTCode HTTP"  -Direction Inbound -Protocol TCP -LocalPort 80  -Action Allow
+# 不要放行 8080
 ```
 
 ---
@@ -271,13 +350,13 @@ server {
    }
    ```
 3. （TODO）确保 `Program.cs` 注册的是 `OracleSystemDbContext` 而非 `SqliteSystemDbContext`
-4. 重启 API：`systemctl restart cxmtcode-api` 或 `docker compose restart cxmtcode-api`
+4. 重启后端应用程序池：`Restart-WebAppPool -Name CXMTCodeApiPool`
 
 **修改 Oracle 密码 / 主机**：
 
 1. 在 Oracle 中改密码：`ALTER USER CXMT_PLATFORM IDENTIFIED BY "新密码";`
-2. 更新 `appsettings.Production.json` 的连接串
-3. 重启 API
+2. 更新 `publish\api\appsettings.Production.json` 的连接串
+3. 重启 API：`Restart-WebAppPool -Name CXMTCodeApiPool`
 
 ### 5.3 添加 / 修改业务数据库连接
 
@@ -378,26 +457,50 @@ DryRun 必须连备库，硬编码安全策略阻止预演访问主库。
 
 ### 7.1 升级
 
-```bash
-# 备份
-docker run --rm -v cxmtcode_db:/data -v $(pwd):/b alpine tar czf /b/db-$(date +%F).tar.gz -C /data .
-git pull
-docker compose up --build -d
+```powershell
+# 1. 备份 SQLite DB（或 Oracle expdp）
+Copy-Item C:\inetpub\cxmtcode\api\db\cxmtcode-prod.db `
+          C:\backup\cxmtcode-$(Get-Date -Format yyyyMMdd).db
+
+# 2. 在构建机重新构建
+.\build\publish.ps1
+
+# 3. 停止站点（避免文件占用）
+Stop-WebAppPool  -Name CXMTCodeApiPool
+Stop-WebAppPool  -Name CXMTCodeWebPool
+
+# 4. 覆盖发布目录
+robocopy .\publish\api C:\inetpub\cxmtcode\api /MIR /XD logs db
+robocopy .\publish\web C:\inetpub\cxmtcode\web /MIR
+
+# 5. 启动站点
+Start-WebAppPool -Name CXMTCodeApiPool
+Start-WebAppPool -Name CXMTCodeWebPool
 ```
 
-如有 DDL 变更：
+如有 DDL 变更（Oracle）：
 
-```bash
-sqlplus / as sysdba @db/upgrade-2026Q3.sql  # 由 DBA 提供升级脚本
+```sql
+sqlplus / as sysdba @db/upgrade-2026Q3.sql   -- 由 DBA 提供升级脚本
 ```
 
 ### 7.2 回滚
 
-```bash
-git checkout <旧版本 tag>
-docker compose up --build -d
-# 必要时还原 DB 备份
-docker run --rm -v cxmtcode_db:/data -v $(pwd):/b alpine tar xzf /b/db-YYYY-MM-DD.tar.gz -C /data
+```powershell
+# 1. 切回旧版本 tag 重新构建
+git checkout v3.0.0
+.\build\publish.ps1
+
+# 2. 停 / 覆盖 / 启
+Stop-WebAppPool  -Name CXMTCodeApiPool
+robocopy .\publish\api C:\inetpub\cxmtcode\api /MIR /XD logs db
+robocopy .\publish\web C:\inetpub\cxmtcode\web /MIR
+
+# 3. 还原 DB 备份（仅 SQLite 模式）
+Copy-Item C:\backup\cxmtcode-YYYYMMDD.db `
+          C:\inetpub\cxmtcode\api\db\cxmtcode-prod.db -Force
+
+Start-WebAppPool -Name CXMTCodeApiPool
 ```
 
 ---
@@ -428,24 +531,27 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ## 7.6 C4 Db2 真实驱动接入（生产可选）
 
-仓库默认的 `CXMTCode.Plugins.DB2_115.Db2Adapter` 是占位实现（保留 HADR STANDBY 安全校验逻辑）。如需接入真实 Db2，在生产 Docker 镜像中执行：
+仓库默认的 `CXMTCode.Plugins.DB2_115.Db2Adapter` 是占位实现（保留 HADR STANDBY 安全校验逻辑）。如需接入真实 Db2，在 Windows Server 上：
 
-```dockerfile
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
-RUN apt-get update && apt-get install -y libxml2 libstdc++6
-ENV IBM_DB_HOME=/opt/ibm/db2/clidriver
-COPY clidriver /opt/ibm/db2/clidriver
-```
-
-并在 `Db2Adapter.cs` 中按 `OracleAdapter.cs` 的实现模式接入 `IBM.Data.Db2` 或 `Net.IBM.Data.Db2` 包。
+1. 下载并安装 IBM Data Server Driver Package（`clidriver`）
+2. 设置系统环境变量 `IBM_DB_HOME = C:\Program Files\IBM\IBM DATA SERVER DRIVER`
+3. 在 `CXMTCode.Plugins.DB2_115.csproj` 添加：
+   ```xml
+   <PackageReference Include="Net.IBM.Data.Db2" Version="8.0.0.300" />
+   ```
+4. 在 `Db2Adapter.cs` 中按 `OracleAdapter.cs` 的实现模式调用 `DB2Connection`
+5. 重新执行 `.\build\publish.ps1` + 重启 `CXMTCodeApiPool`
 
 ## 八、监控 / 健康检查
 
 | 项 | 端点 / 命令 |
 | --- | --- |
-| 健康检查 | `GET /`（HTTP 200 + JSON） |
-| Swagger | `GET /swagger`（仅 Development） |
-| 日志 | `journalctl -u cxmtcode-api -f` 或 `docker compose logs -f cxmtcode-api` |
+| 健康检查 | `GET http://localhost:8080/`（HTTP 200 + JSON） |
+| Swagger | `GET /swagger` |
+| 标准输出日志 | `publish\api\logs\stdout_*.log`（IIS ANCM stdoutLogEnabled=true） |
+| 事件查看器 | `eventvwr → 应用程序`，事件源 `IIS AspNetCore Module V2` |
+| 应用程序池状态 | `Get-WebAppPoolState CXMTCodeApiPool` |
+| 实时回收监控 | `Get-WebsiteState cxmtcode-api` |
 | 数据库 | 直接查询 Oracle 系统库 `SELECT COUNT(*) FROM CXMT_AUDIT_LOGS` |
 
 ---
@@ -454,7 +560,10 @@ COPY clidriver /opt/ibm/db2/clidriver
 
 | 现象 | 可能原因 | 处理 |
 | --- | --- | --- |
-| 启动失败 `Could not open Sqlite database` | `db/` 目录无写权限 | `chmod 770 db/` 或检查 Docker 卷权限 |
+| 启动失败 `Could not open Sqlite database` | `publish\api\db\` 目录无写权限 | 给 `IIS_IUSRS` 授「修改」权限（或重新跑 `install-iis.ps1`） |
+| HTTP 500.30 / 500.31 / 502.5 | ASP.NET Core Module 启动失败 | 看 `logs\stdout_*.log`；检查 .NET 8 Hosting Bundle 已装并重启 IIS |
+| `Could not load file or assembly 'CXMTCode.Plugins.Oracle19c'` | publish 目录不完整 | 重跑 `publish.ps1`，覆盖完整 publish\api |
+| /api 返回 502.3（坏网关） | URL Rewrite + ARR 未启用 / 端口被占 | IIS Manager → ARR → Server Proxy Settings 勾 Enable proxy；`netstat -ano | findstr 8080` |
 | 登录返回 401 即使密码正确 | JwtSettings.SecretKey 在不同节点不一致 | 多节点部署需共享同一 SecretKey |
 | API 报「角色不足」 | 当前账号角色不达接口要求 | 检查 `/api/me/profile` 返回的 role |
 | 顶部横幅显示但 SysAdmin 看不到切换开关 | 当前角色非 SysAdmin | 在 `CXMT_USERS` 中确认 ROLE=3 |
@@ -467,7 +576,7 @@ COPY clidriver /opt/ibm/db2/clidriver
 
 1. JwtSettings.SecretKey 至少 32 字符，建议 64 字符以上随机串
 2. Oracle 系统库 `CXMT_PLATFORM` 用户密码定期轮换
-3. 所有连接走内网；外暴 Nginx 强制 TLS 1.2+
+3. 所有连接走内网；IIS 站点强制 HTTPS（TLS 1.2+）；不要把后端 8080 直接暴露到公网
 4. 审计日志 `CXMT_AUDIT_LOGS` 留存 ≥ 3 年（已按季度分区）
 5. SM3 哈希链可用 `POST /api/audit/verify/{logId}`（SysAdmin）周期性校验
 6. 国密占位实现替换为真实 GMSSL 后，须重新做安全评估

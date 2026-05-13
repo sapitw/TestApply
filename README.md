@@ -11,7 +11,7 @@
 | 系统 DB | Oracle 19C Enterprise（生产）/ SQLite（开发） |
 | 业务 DB | Oracle 19C / MSSQL 2019 / MySQL 8.0+ / DB2 11.5~12.1 |
 | 安全 | JWT · 国密 SM2/SM3/SM4（占位实现）· 等保 2.0 三级 |
-| 部署 | Docker · docker-compose · Nginx |
+| 部署 | Windows Server 2019+ · IIS 10+ · ASP.NET Core Module V2 · URL Rewrite + ARR |
 
 ## 仓库布局
 
@@ -19,7 +19,9 @@
 CXMTCode/
 ├── CXMTCode.sln                            # 解决方案
 ├── Directory.Build.props                   # 全局 MSBuild 属性
-├── docker-compose.yml                      # 一键部署
+├── build/publish.ps1                       # Windows 一键发布脚本
+├── build/install-iis.ps1                   # IIS 一键创建站点（管理员）
+├── build/build.sh                          # Linux/macOS 一键构建
 ├── .env.example                            # 环境变量示例
 ├── build/build.sh                          # 一键构建脚本
 ├── db/oracle-init.sql                      # Oracle 19C 初始化 DDL
@@ -77,27 +79,44 @@ npm run dev
 
 默认账号：`admin / admin@123`（首次登录会用 SM3 哈希存储真实密码）
 
-## 一键构建
+## 一键构建（Linux / WSL / macOS）
 
 ```bash
 ./build/build.sh
-# 会依次：
+# 依次：
 #   1. dotnet build CXMTCode.sln -c Release
-#   2. dotnet test  CXMTCode.sln -c Release（27/27 全通过）
-#   3. npm install + vite build
+#   2. dotnet test  CXMTCode.sln -c Release（60/60 通过）
+#   3. dotnet publish (win-x64) → publish/api/
+#   4. npm install + vite build → publish/web/
 ```
 
-## Docker 部署
+## 一键构建（Windows）
 
-```bash
-docker compose up --build -d
-# 访问：
-#   前端：http://localhost
-#   后端：http://localhost:8080
-#   Swagger：http://localhost:8080/swagger
+```powershell
+.\build\publish.ps1
+# 输出 publish\api\  和  publish\web\，可直接复制到 IIS 站点目录
 ```
 
-详细生产部署与 Oracle 19C 连接配置见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+## IIS / Windows Server 部署（生产推荐）
+
+> 前置：Windows Server 2019+ · IIS 10+ · .NET 8 Hosting Bundle · URL Rewrite Module
+
+```powershell
+# 1. 在 Windows Server 上执行一次构建（也可在 CI 中构建后复制 publish/ 过来）
+.\build\publish.ps1
+
+# 2. 一键创建 IIS 站点 + 应用程序池（管理员 PowerShell）
+.\build\install-iis.ps1
+#   默认创建：
+#     cxmtcode-api  端口 8080 → publish\api
+#     cxmtcode-web  端口 80   → publish\web
+#   并赋予 IIS_IUSRS 读写权限（写 logs/db）
+
+# 3. 浏览器打开 http://localhost/
+#    默认账号：admin / admin@123（首次登录后请立刻修改密码）
+```
+
+完整部署说明、IIS 配置、Oracle 19C 系统库连接、SMTP / JWT 密钥管理见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
 ## 权限模型（RBAC 三角色）
 
@@ -140,7 +159,7 @@ docker compose up --build -d
 
 ## 仍待生产环境补全
 
-- [ ] **C4 DB2 真实驱动**：需要 IBM clidriver 原生库 + 许可证；Dockerfile 注释已写明 RUN 步骤
+- [ ] **C4 DB2 真实驱动**：需要 IBM clidriver 原生库 + 许可证；详见 `docs/DEPLOYMENT.md` §7.6
 - [ ] **E3 真实证书签名**：当前 BouncyCastle SM2 占位密钥；接入企业 PKI（USBKey / HSM）需运维侧
 - [ ] **测试 Runner 真实执行**：F1-F5 占位为「全部通过」；接入 dotnet test / k6 / NBomber 后替换 `TestSuiteService.TriggerRunAsync`
 

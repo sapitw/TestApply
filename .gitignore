@@ -6,6 +6,7 @@ obj/
 .vs/
 artifacts/
 TestResults/
+publish/
 
 # Node / Vite
 node_modules/

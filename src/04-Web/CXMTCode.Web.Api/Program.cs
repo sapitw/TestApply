@@ -146,11 +146,17 @@ using (var scope = app.Services.CreateScope())
     await host.StartAllAsync();
 }
 
-if (app.Environment.IsDevelopment())
+// 当 IIS 反向代理 / ARR 转发请求时，恢复客户端真实 IP 与 scheme
+app.UseForwardedHeaders(new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                      | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+                      | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost
+});
+
+// Swagger 在生产也开启，便于运维诊断；如不需要可在生产 appsettings 关闭
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseCors("AllowReactApp");
 app.UseAuthentication();

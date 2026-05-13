@@ -37,7 +37,7 @@
 | C1 Oracle 19C 适配 | Stub | ✅ **Oracle.ManagedDataAccess.Core 23.6.1**（CDB / PDB / ADG 校验） |
 | C2 SQL Server 2019 适配 | Stub | ✅ **Microsoft.Data.SqlClient 5.2.2**（AlwaysOn ReadOnly 强制） |
 | C3 MySQL 8.0+ 适配 | Stub | ✅ **MySqlConnector 2.3.7**（GR Secondary @@read_only 校验） |
-| C4 DB2 11.5 适配 | Stub | ⚠️ 仍为 Stub（IBM clidriver 需主机原生库，Dockerfile 已写明步骤） |
+| C4 DB2 11.5 适配 | Stub | ⚠️ 仍为 Stub（IBM clidriver 需主机原生库，`docs/DEPLOYMENT.md` §7.6 已写明接入步骤） |
 | D5 回滚 SQL 生成器 | TODO | ✅ **真实实现**：INSERT→DELETE MINUS/EXCEPT、UPDATE→UPDATE SET FROM 备份、DELETE→INSERT SELECT |
 | PluginRegistry 反射扫描 | TODO | ✅ **DI 感知扫描** + Program.cs 启动期自动注册 |
 | 表级用户授权 CRUD | 前端占位 | ✅ **后端 4 API + 前端 UserGrants 完整页** |
@@ -246,7 +246,7 @@ dist/assets/vendor-antd-*.js         1,975.92 kB  (gzip 550 kB)
 
 | 项 | 说明 |
 | --- | --- |
-| C4 Db2 真实驱动 | 需要 IBM clidriver 原生库 + 许可证；Dockerfile 已写明 RUN 步骤 |
+| C4 Db2 真实驱动 | 需要 IBM clidriver 原生库 + 许可证；详见 DEPLOYMENT §7.6 |
 | ANTLR4 完整文法 | 当前增强 AST 分析器覆盖 99% 场景；如需 100% 兼容，可加 Antlr4.Runtime.Standard + 生成 SQLParser |
 | E3 真实证书签名 | 当前 BouncyCastle SM2 占位密钥；接入企业 PKI（USBKey / HSM）需运维侧 |
 | 测试 Runner 真实执行 | F1-F5 当前直接判定通过；接入真实 Runner（dotnet test / k6 / NBomber）后替换 `TestSuiteService.TriggerRunAsync` 占位逻辑 |

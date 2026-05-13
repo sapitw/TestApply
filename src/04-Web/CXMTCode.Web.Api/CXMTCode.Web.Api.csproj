@@ -2,7 +2,11 @@
   <PropertyGroup>
     <RootNamespace>CXMTCode.Web.Api</RootNamespace>
     <UserSecretsId>cxmtcode-web-api-dev</UserSecretsId>
+    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
   </PropertyGroup>
+  <ItemGroup>
+    <None Update="web.config" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\01-Kernel\CXMTCode.Kernel.Contracts\CXMTCode.Kernel.Contracts.csproj" />
     <ProjectReference Include="..\..\01-Kernel\CXMTCode.Kernel\CXMTCode.Kernel.csproj" />

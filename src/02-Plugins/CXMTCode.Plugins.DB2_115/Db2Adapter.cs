@@ -6,15 +6,15 @@ namespace CXMTCode.Plugins.DB2_115;
 /// <summary>
 /// C4 IBM Db2 11.5~12.1.4 适配。
 /// <para>
-/// 由于 IBM.Data.Db2 / Net.IBM.Data.Db2 需要 Linux 原生 clidriver 与许可证文件（IBM_DB_HOME），
-/// 在通用 CI / 容器环境中不便直接打包。建议在生产 Docker 镜像中按以下方式接入：
+/// 由于 Net.IBM.Data.Db2 需要 IBM clidriver 原生库与许可证文件（IBM_DB_HOME），
+/// 出仓库默认不携带二进制驱动。Windows Server 上接入步骤：
 /// </para>
-/// <code>
-/// FROM mcr.microsoft.com/dotnet/aspnet:8.0
-/// RUN apt-get update &amp;&amp; apt-get install -y libxml2 libstdc++6 ...
-/// ENV IBM_DB_HOME=/opt/ibm/db2/clidriver
-/// COPY clidriver /opt/ibm/db2/clidriver
-/// </code>
+/// <list type="number">
+///   <item>安装 IBM Data Server Driver Package，设置环境变量 <c>IBM_DB_HOME</c></item>
+///   <item>在 <c>CXMTCode.Plugins.DB2_115.csproj</c> 加 <c>&lt;PackageReference Include="Net.IBM.Data.Db2" /&gt;</c></item>
+///   <item>按 <see cref="CXMTCode.Plugins.Oracle19c.OracleAdapter"/> 的写法实现真实方法</item>
+///   <item>重新执行 build/publish.ps1，重启 CXMTCodeApiPool</item>
+/// </list>
 /// 当前实现继承 <see cref="AdapterStubBase"/>，所有方法返回明确的「未接入驱动」错误，
 /// 保证微内核 / 业务层路径在没有 DB2 时仍可跑通；HADR STANDBY 校验逻辑保留。
 /// </summary>
