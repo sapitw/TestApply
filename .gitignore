@@ -37,3 +37,4 @@ appsettings.Production.json
 appsettings.Local.json
 .env
 .env.local
+publish-linux/
