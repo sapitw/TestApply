@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E3 FDC — Fault Detection (FD) 公式與用法參考</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --line:#2a2f3a;
+    --txt:#e6e8ee; --muted:#9aa3b2; --accent:#5db0ff; --accent2:#7ee0b8;
+    --warn:#ffcf6b; --code:#11141a;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans CJK TC","Microsoft JhengHei",sans-serif;}
+  .wrap{display:flex;min-height:100vh}
+  nav{width:300px;flex:0 0 300px;background:var(--panel);border-right:1px solid var(--line);
+    position:sticky;top:0;height:100vh;overflow:auto;padding:18px 14px}
+  nav h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:18px 8px 6px}
+  nav a{display:block;color:var(--txt);text-decoration:none;padding:5px 8px;border-radius:6px;font-size:13.5px}
+  nav a:hover{background:var(--panel2);color:var(--accent)}
+  nav .brand{font-weight:700;font-size:16px;padding:4px 8px 12px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  nav .brand small{display:block;color:var(--muted);font-weight:400;font-size:12px;margin-top:4px}
+  main{flex:1;min-width:0;padding:34px 46px 120px;max-width:1000px}
+  h1{font-size:28px;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 26px}
+  h2.sec{font-size:22px;margin:46px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:17px;margin:26px 0 6px;color:var(--accent2)}
+  p{margin:8px 0}
+  code{background:var(--code);padding:2px 6px;border-radius:5px;font-size:13px;
+    font-family:"SF Mono",Consolas,"Roboto Mono",monospace;color:#d6deeb}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--accent)}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:14px 18px;margin:14px 0}
+  .formula{background:var(--panel2);border-left:3px solid var(--accent);
+    border-radius:6px;padding:2px 16px;margin:10px 0;overflow-x:auto}
+  .note{background:rgba(255,207,107,.08);border:1px solid var(--warn);
+    border-radius:8px;padding:12px 16px;margin:16px 0}
+  .note b{color:var(--warn)}
+  .ok{border-color:var(--accent2);background:rgba(126,224,184,.07)}
+  .ok b{color:var(--accent2)}
+  .usage{color:var(--muted);font-size:13.5px;margin:4px 0 0}
+  .usage b{color:var(--txt)}
+  .pill{display:inline-block;background:var(--panel2);border:1px solid var(--line);
+    color:var(--muted);font-size:11px;padding:1px 8px;border-radius:999px;margin-left:8px;vertical-align:middle}
+  a.src{color:var(--accent)}
+  footer{color:var(--muted);font-size:12px;margin-top:60px;border-top:1px solid var(--line);padding-top:18px}
+  ul{margin:8px 0;padding-left:22px}
+  li{margin:4px 0}
+  .toc-top{margin-bottom:6px}
+  @media(max-width:920px){.wrap{flex-direction:column}nav{width:100%;height:auto;position:relative}main{padding:24px 18px 80px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <div class="brand">E3 FDC · FD 參考<small>公式與用法 / Formulas &amp; Usage</small></div>
+  <h2>總覽</h2>
+  <a class="toc-top" href="#scope">0. 範圍與資料來源</a>
+  <a href="#concept">1. FDC / FD 概念與資料模型</a>
+  <h2>單變量 (Univariate)</h2>
+  <a href="#calc">2. 視窗指標計算 (Calculations)</a>
+  <a href="#calc-central">2.1 集中趨勢</a>
+  <a href="#calc-spread">2.2 離散程度</a>
+  <a href="#calc-extreme">2.3 極值與位置</a>
+  <a href="#calc-shape">2.4 形狀 / 趨勢</a>
+  <a href="#calc-integral">2.5 面積 / 能量</a>
+  <a href="#calc-rel">2.6 設定點 / 相關</a>
+  <h2>偵測 (Detection)</h2>
+  <a href="#limits">3. 控制界限公式</a>
+  <a href="#charts">4. 管制圖 (EWMA / CUSUM)</a>
+  <a href="#capability">5. 製程能力指數</a>
+  <a href="#health">6. 健康指標 / 正規化</a>
+  <h2>多變量 (Multivariate)</h2>
+  <a href="#mva">7. 標準化與 PCA</a>
+  <a href="#t2spe">8. Hotelling T² 與 SPE/DModX</a>
+  <a href="#contrib">9. 貢獻度分析 (分類)</a>
+  <h2>流程</h2>
+  <a href="#violation">10. 違規 / 告警邏輯</a>
+  <a href="#glossary">11. 名詞對照</a>
+  <a href="#sources">12. 參考來源</a>
+</nav>
+
+<main>
+<h1>E3 FDC — Fault Detection (FD) 公式與用法參考</h1>
+<p class="sub">半導體 APC/FDC 故障偵測模組所用之計算、控制界限與多變量方法的完整公式與使用說明。</p>
+
+<!-- 0 -->
+<h2 class="sec" id="scope">0. 範圍與資料來源 <span class="pill">先讀我</span></h2>
+<div class="note">
+<b>重要說明（誠實揭露）：</b> Applied Materials「Applied SmartFactory&nbsp;E3」FDC 的隨附說明檔（CHM）屬於
+<b>授權客戶專屬、未公開於網際網路</b>的專有文件。經過多輪網路搜尋，公開網路上只能取得 Applied 的
+產品行銷頁面與一般學術 FDC 文獻，<b>無法</b>取得該專有 CHM 的逐字內容；本文件因此<b>不會</b>偽造或
+重製任何受著作權保護的原始說明檔文字。
+</div>
+<div class="note ok">
+<b>本文件實際提供：</b> 將 E3 FD 模組所<b>實作</b>的、業界標準且公開可考的故障偵測數學，整理成一份
+可獨立使用的參考——涵蓋每一種單變量視窗指標計算、控制界限公式、以及多變量
+（PCA / Hotelling&nbsp;T² / SPE-DModX）方法，每項皆附<b>公式</b>與<b>用法</b>。所有公式均為統計學
+／線性代數教科書層級之標準數學（非任何廠商專有表述），可安全用於建立 Agent Skills 的知識基礎。
+</div>
+<p>標示說明：每個條目下方的 <span class="usage"><b>用法</b></span> 段落描述該指標在 FD 設定中的典型使用
+方式（在哪個 trace / step / window 上計算、如何套用界限、產生何種違規）。</p>
+
+<!-- 1 -->
+<h2 class="sec" id="concept">1. FDC / FD 概念與資料模型</h2>
+<p>FDC（Fault Detection &amp; Classification，故障偵測與分類）即時收集機台感測器資料，判斷製程／設備
+是否異常（<b>FD＝偵測</b>），並協助找出根因（<b>C＝分類</b>）。FD 模組的資料模型層級如下：</p>
+<table>
+<tr><th>層級</th><th>說明</th></tr>
+<tr><td><b>Sensor / Trace</b></td><td>單一感測器隨時間的數值序列 \( \{x_1,\dots,x_n\} \)（如 RF 功率、腔壓、流量、閥位）。</td></tr>
+<tr><td><b>Context</b></td><td>觸發監控的條件組合（機台、產品、配方/recipe、製程步驟）。決定套用哪一組模型與界限。</td></tr>
+<tr><td><b>Step / Window</b></td><td>在 trace 上界定的時間區段（依製程步進、事件、或時間切出）。指標只在 window 內計算，以排除暫態。</td></tr>
+<tr><td><b>Indicator / Calculation</b></td><td>將 window 內的資料縮約成單一統計量（下節）。每個 indicator 是被監控的特徵。</td></tr>
+<tr><td><b>Limit / Model</b></td><td>套用在 indicator 上的控制界限（單變量）或統計模型（多變量），判定是否違規。</td></tr>
+<tr><td><b>Violation / Alarm</b></td><td>indicator 超出界限時產生的告警事件，可串接 OCAP（失控行動計畫）。</td></tr>
+</table>
+<p>下文符號約定：window 內樣本為 \( x_1,x_2,\dots,x_n \)，對應時間戳為 \( t_1,\dots,t_n \)；
+樣本平均 \( \bar{x} \)，樣本標準差 \( s \)。</p>
+
+<!-- 2 -->
+<h2 class="sec" id="calc">2. 單變量視窗指標計算（Calculations）</h2>
+<p>以下為 FD 模組在 trace 視窗上可選用的標準縮約計算。每一項皆給出數學定義與用法。</p>
+
+<h3 id="calc-central">2.1 集中趨勢</h3>
+
+<div class="card">
+<b>平均值 / Mean (Average)</b>
+<div class="formula">\[ \bar{x}=\frac{1}{n}\sum_{i=1}^{n}x_i \]</div>
+<p class="usage"><b>用法：</b>最常用的 FD 指標。對「應穩定」的 trace（如步驟內的腔壓、溫度設定點）取窗內平均，
+再以 n-sigma 或固定界限監控；對製程偏移最敏感。</p>
+</div>
+
+<div class="card">
+<b>中位數 / Median</b>
+<div class="formula">\[ \tilde{x}= \begin{cases} x_{((n+1)/2)} & n\text{ 為奇數}\\[4pt] \tfrac12\!\left(x_{(n/2)}+x_{(n/2+1)}\right) & n\text{ 為偶數}\end{cases} \]</div>
+<p class="usage"><b>用法：</b>對 spike / 離群點具穩健性。當 trace 易有突波雜訊時，以中位數取代平均做為穩健中心估計。</p>
+</div>
+
+<div class="card">
+<b>修整平均 / Trimmed Mean</b>
+<div class="formula">\[ \bar{x}_{\alpha}=\frac{1}{n-2k}\sum_{i=k+1}^{n-k}x_{(i)},\qquad k=\lfloor \alpha n\rfloor \]</div>
+<p class="usage"><b>用法：</b>去除頭尾各 \(\alpha\) 比例極值後取平均，兼顧穩健性與靈敏度；用於含啟動／關閉暫態的視窗。</p>
+</div>
+
+<h3 id="calc-spread">2.2 離散程度</h3>
+
+<div class="card">
+<b>樣本標準差 / Standard Deviation</b> &nbsp;<span class="pill">σ</span>
+<div class="formula">\[ s=\sqrt{\frac{1}{n-1}\sum_{i=1}^{n}(x_i-\bar{x})^2} \]</div>
+<p class="usage"><b>用法：</b>監控窗內<b>穩定度</b>。平均值正常但 \(s\) 升高常代表控制迴路振盪、訊號雜訊增加或設備劣化。
+FD 常同時監控 Mean 與 StdDev 兩個指標。</p>
+</div>
+
+<div class="card">
+<b>變異數 / Variance</b>
+<div class="formula">\[ s^2=\frac{1}{n-1}\sum_{i=1}^{n}(x_i-\bar{x})^2 \]</div>
+<p class="usage"><b>用法：</b>同上，部分模型（如多變量標準化）直接以變異數運算。</p>
+</div>
+
+<div class="card">
+<b>全距 / Range</b>
+<div class="formula">\[ R=\max_i x_i-\min_i x_i \]</div>
+<p class="usage"><b>用法：</b>計算量小的離散指標，對單點 spike 敏感；常用於快速偵測瞬間突波或失控擺幅。</p>
+</div>
+
+<div class="card">
+<b>均方根 / RMS</b>
+<div class="formula">\[ x_{\text{rms}}=\sqrt{\frac{1}{n}\sum_{i=1}^{n}x_i^{2}} \]</div>
+<p class="usage"><b>用法：</b>用於以能量／振幅為意義的訊號（振動、AC 量測），監控其有效值。</p>
+</div>
+
+<div class="card">
+<b>平均絕對偏差 / Mean Absolute Deviation</b>
+<div class="formula">\[ \mathrm{MAD}=\frac{1}{n}\sum_{i=1}^{n}\left|x_i-\bar{x}\right| \]</div>
+<p class="usage"><b>用法：</b>穩健離散度量；對非常態或重尾雜訊比標準差穩定。</p>
+</div>
+
+<h3 id="calc-extreme">2.3 極值與位置</h3>
+<table>
+<tr><th>指標</th><th>公式</th><th>用法</th></tr>
+<tr><td>最小值 Min</td><td>\( \min_i x_i \)</td><td>監控不可低於門檻者（如最低 RF 功率、最低流量）。</td></tr>
+<tr><td>最大值 Max</td><td>\( \max_i x_i \)</td><td>監控不可超過上限者（如尖峰溫度、尖峰壓力）。</td></tr>
+<tr><td>計數 Count / N</td><td>\( n \)（窗內有效點數）</td><td>偵測資料漏失、取樣率異常、步驟時間改變。</td></tr>
+<tr><td>首值 First</td><td>\( x_1 \)</td><td>檢查步驟起始條件（初始壓力／溫度）。</td></tr>
+<tr><td>末值 Last</td><td>\( x_n \)</td><td>檢查步驟終點到達值（終點偵測）。</td></tr>
+<tr><td>差值 Delta</td><td>\( \Delta=x_n-x_1 \)</td><td>整段淨變化量（升/降幅）。</td></tr>
+<tr><td>步長 Duration</td><td>\( t_n-t_1 \)</td><td>製程步驟時間長度，偵測配方時序漂移。</td></tr>
+<tr><td>百分位 Percentile</td><td>\( P_q=x_{(\lceil q\,n\rceil)} \)（升冪排序）</td><td>以 \(P_{95}\)、\(P_{05}\) 等做穩健極值估計。</td></tr>
+<tr><td>到值時間 Time-at-value</td><td>首次 \( x_i \ge v \) 之 \( t_i \)</td><td>量測達到設定點所需時間（上升時間、終點時間）。</td></tr>
+<tr><td>最大值時間 Time-at-max</td><td>\( \arg\max_i x_i \) 對應之 \( t_i \)</td><td>峰值出現時刻，用於時序對位與分類。</td></tr>
+</table>
+
+<h3 id="calc-shape">2.4 形狀 / 趨勢</h3>
+
+<div class="card">
+<b>斜率 / Slope（最小二乘線性回歸）</b>
+<div class="formula">\[ b=\frac{\displaystyle\sum_{i=1}^{n}(t_i-\bar t)(x_i-\bar x)}{\displaystyle\sum_{i=1}^{n}(t_i-\bar t)^2},\qquad a=\bar x-b\,\bar t \]</div>
+<p class="usage"><b>用法：</b>對「應為斜坡或應平坦」的 trace 取斜率 \(b\)。FD 用以偵測漂移（drift）、ramp 速率異常、
+應穩定區段卻有趨勢。截距 \(a\) 則用於檢查外推起始水準。</p>
+</div>
+
+<div class="card">
+<b>線性配適度 / \(R^2\)</b>
+<div class="formula">\[ R^{2}=1-\frac{\sum_i (x_i-\hat x_i)^2}{\sum_i (x_i-\bar x)^2},\qquad \hat x_i=a+b\,t_i \]</div>
+<p class="usage"><b>用法：</b>判斷斜率是否可信／trace 是否仍呈線性；\(R^2\) 驟降可代表波形畸變。</p>
+</div>
+
+<div class="card">
+<b>曲率 / 二次項係數（多項式配適）</b>
+<div class="formula">\[ x \approx c_0+c_1 t+c_2 t^{2}\quad\Rightarrow\quad \text{監控 }c_2 \]</div>
+<p class="usage"><b>用法：</b>偵測非線性彎曲（如終點曲線形狀改變、加熱曲線變形）。</p>
+</div>
+
+<div class="card">
+<b>導數統計 / Derivative Stats</b>
+<div class="formula">\[ x'_i \approx \frac{x_{i+1}-x_i}{t_{i+1}-t_i};\quad \text{監控 } \max|x'_i|,\ \overline{x'},\ s_{x'} \]</div>
+<p class="usage"><b>用法：</b>偵測突跳、過衝、控制迴路振盪（一階差分的最大值或標準差）。</p>
+</div>
+
+<h3 id="calc-integral">2.5 面積 / 能量</h3>
+
+<div class="card">
+<b>積分面積 / Area（梯形法）</b>
+<div class="formula">\[ A=\sum_{i=1}^{n-1}\frac{(x_i+x_{i+1})}{2}\,(t_{i+1}-t_i) \]</div>
+<p class="usage"><b>用法：</b>累積劑量／能量類指標（如電漿能量＝功率對時間積分、總氣體用量＝流量積分）。
+對「曲線整體量」異常比逐點界限更靈敏。</p>
+</div>
+
+<div class="card">
+<b>對基準的面積偏差 / Area vs. Baseline</b>
+<div class="formula">\[ A_{\Delta}=\sum_{i=1}^{n-1}\frac{(x_i-r_i)+(x_{i+1}-r_{i+1})}{2}\,(t_{i+1}-t_i) \]</div>
+<p class="usage"><b>用法：</b>\(r_i\) 為黃金批／參考曲線。量化整段波形對 golden trace 的偏離面積，用於波形比對型 FD。</p>
+</div>
+
+<h3 id="calc-rel">2.6 設定點 / 相關</h3>
+
+<div class="card">
+<b>設定點偏差 / Setpoint Deviation（RMSE 對目標）</b>
+<div class="formula">\[ \mathrm{RMSE}=\sqrt{\frac{1}{n}\sum_{i=1}^{n}\left(x_i-\mathrm{SP}_i\right)^2} \]</div>
+<p class="usage"><b>用法：</b>\(\mathrm{SP}_i\) 為配方設定點。量化控制迴路追隨設定點的能力，偵測控制器劣化或致動器故障。</p>
+</div>
+
+<div class="card">
+<b>兩感測器相關係數 / Pearson Correlation</b>
+<div class="formula">\[ r_{xy}=\frac{\sum_i (x_i-\bar x)(y_i-\bar y)}{\sqrt{\sum_i (x_i-\bar x)^2}\,\sqrt{\sum_i (y_i-\bar y)^2}} \]</div>
+<p class="usage"><b>用法：</b>監控兩個本應連動之訊號（如功率↔反射功率）的相關性；相關性破壞常代表硬體故障。</p>
+</div>
+
+<!-- 3 -->
+<h2 class="sec" id="limits">3. 控制界限公式（單變量偵測）</h2>
+<p>將 §2 算出的 indicator 值 \(I\)（或其時間序列 \(I_k\)）與界限比較。基準統計量 \( \mu_0,\sigma_0 \)
+由訓練期（baseline）正常批次估計。</p>
+
+<table>
+<tr><th>類型</th><th>公式</th><th>用法</th></tr>
+<tr><td><b>固定 / 絕對界限</b></td><td>\( \mathrm{LCL}=L,\ \mathrm{UCL}=U \)（常數）</td><td>由工程規格直接給定（spec limit），與資料統計無關。</td></tr>
+<tr><td><b>n-sigma 統計界限</b></td><td>\( \mathrm{UCL/LCL}=\mu_0 \pm k\,\sigma_0 \)（常用 \(k=3\)）</td><td>最常見。由 baseline 估 \( \mu_0,\sigma_0 \)，\(k\) 可調整靈敏度。</td></tr>
+<tr><td><b>單邊界限</b></td><td>僅 \( I>\mu_0+k\sigma_0 \) 或僅 \( I<\mu_0-k\sigma_0 \)</td><td>只有單方向有風險時（如僅怕過高溫度）。</td></tr>
+<tr><td><b>相對 / 百分比界限</b></td><td>\( \mu_0(1\pm p) \)</td><td>以目標值的百分比設限，適合跨配方共用。</td></tr>
+<tr><td><b>動態 / 移動界限</b></td><td>\( \bar I_{w}\pm k\,s_{I,w} \)（最近 \(w\) 批的移動統計）</td><td>容許緩慢正常漂移，只抓相對突變。</td></tr>
+<tr><td><b>非對稱界限</b></td><td>\( \mu_0+k_U\sigma_0 \) 與 \( \mu_0-k_L\sigma_0 \)，\(k_U\neq k_L\)</td><td>上下風險不對稱時分別設定。</td></tr>
+</table>
+<div class="card">
+<b>標準化偏差指標（z-score / 健康分數的基礎）</b>
+<div class="formula">\[ z=\frac{I-\mu_0}{\sigma_0}\qquad\Rightarrow\qquad \text{違規條件 } |z|>k \]</div>
+<p class="usage"><b>用法：</b>把不同量綱的指標正規化成統一尺度，便於跨指標彙總成單一健康分數（見 §6）。</p>
+</div>
+
+<!-- 4 -->
+<h2 class="sec" id="charts">4. 管制圖（時間序列偵測）</h2>
+
+<div class="card">
+<b>Shewhart 個別值圖（Individuals）</b>
+<div class="formula">\[ \mathrm{CL}=\mu_0,\qquad \mathrm{UCL/LCL}=\mu_0\pm 3\,\sigma_0 \]</div>
+<p class="usage"><b>用法：</b>逐批指標的基本圖；常配合 Western Electric 連串規則（見 §10）提升靈敏度。</p>
+</div>
+
+<div class="card">
+<b>EWMA（指數加權移動平均）</b>
+<div class="formula">\[ z_k=\lambda I_k+(1-\lambda)z_{k-1},\qquad z_0=\mu_0,\quad 0<\lambda\le 1 \]</div>
+<div class="formula">\[ \mathrm{UCL/LCL}_k=\mu_0 \pm L\,\sigma_0\sqrt{\frac{\lambda}{2-\lambda}\Big(1-(1-\lambda)^{2k}\Big)} \]</div>
+<p class="usage"><b>用法：</b>對<b>小幅持續漂移</b>遠比 Shewhart 靈敏。\(\lambda\) 小（0.1–0.3）偵測緩漂；
+FD 常用 EWMA 監控逐批指標趨勢。</p>
+</div>
+
+<div class="card">
+<b>CUSUM（累積和）</b>
+<div class="formula">\[ C_k^{+}=\max\!\big(0,\ C_{k-1}^{+}+(I_k-\mu_0)-K\big) \]</div>
+<div class="formula">\[ C_k^{-}=\max\!\big(0,\ C_{k-1}^{-}-(I_k-\mu_0)-K\big) \]</div>
+<p class="usage"><b>用法：</b>\(K\)＝參考值（約 \(\tfrac12\) 待測偏移）。任一累積和超過決策界限 \(H\)（常 \(5\sigma_0\)）即告警；
+對階躍型偏移最有效。</p>
+</div>
+
+<!-- 5 -->
+<h2 class="sec" id="capability">5. 製程能力指數</h2>
+<table>
+<tr><th>指數</th><th>公式</th><th>用法</th></tr>
+<tr><td>\(C_p\)</td><td>\( \dfrac{\mathrm{USL}-\mathrm{LSL}}{6\sigma} \)</td><td>潛在能力（不計偏移）。</td></tr>
+<tr><td>\(C_{pk}\)</td><td>\( \min\!\left(\dfrac{\mathrm{USL}-\mu}{3\sigma},\ \dfrac{\mu-\mathrm{LSL}}{3\sigma}\right) \)</td><td>實際能力（含偏移）；FD/SPC 健康評估常用。</td></tr>
+<tr><td>\(P_p,\ P_{pk}\)</td><td>同上但用整體長期 \(\sigma\)</td><td>長期績效評估。</td></tr>
+</table>
+<p class="usage"><b>用法：</b>不直接做即時偵測，而是用於批次彙總後的設備／製程健康評分與趨勢報表。</p>
+
+<!-- 6 -->
+<h2 class="sec" id="health">6. 健康指標 / 多指標彙總</h2>
+<div class="card">
+<b>正規化健康分數（多 indicator 彙總）</b>
+<div class="formula">\[ H=\sum_{j=1}^{m} w_j\left(\frac{I_j-\mu_{0,j}}{\sigma_{0,j}}\right)^{2}\quad\text{或}\quad H=\max_j \frac{|I_j-\mu_{0,j}|}{k_j\sigma_{0,j}} \]</div>
+<p class="usage"><b>用法：</b>把同一 context 下多個單變量指標彙總成單一設備健康指數（\(w_j\) 為權重）。
+\(H>1\)（max 形式）或超過卡方界限（平方和形式）即異常。是連往多變量 T² 的橋梁。</p>
+</div>
+
+<!-- 7 -->
+<h2 class="sec" id="mva">7. 標準化與 PCA（多變量基礎）</h2>
+<p>令每批為向量 \( \mathbf{x}\in\mathbb{R}^{p} \)（\(p\) 個感測器特徵）。</p>
+
+<div class="card">
+<b>自動尺度化 / Autoscaling</b>
+<div class="formula">\[ \tilde x_{j}=\frac{x_{j}-\mu_{j}}{\sigma_{j}},\qquad j=1,\dots,p \]</div>
+<p class="usage"><b>用法：</b>多變量模型前置必做，消除量綱差異，使各感測器等權重進入 PCA。</p>
+</div>
+
+<div class="card">
+<b>主成分分析 / PCA</b>
+<div class="formula">\[ \mathbf{S}=\frac{1}{N-1}\tilde{\mathbf{X}}^{\!\top}\tilde{\mathbf{X}},\qquad \mathbf{S}\,\mathbf{p}_a=\lambda_a \mathbf{p}_a \]</div>
+<div class="formula">\[ \mathbf{t}=\mathbf{P}^{\!\top}\tilde{\mathbf{x}}\ \ (\text{scores}),\qquad \hat{\tilde{\mathbf{x}}}=\mathbf{P}\mathbf{t}\ \ (\text{重建}) \]</div>
+<p class="usage"><b>用法：</b>由 baseline 正常資料訓練；取前 \(A\) 個主成分（解釋多數變異）建立正常子空間。
+偵測時把新批投影，計算 §8 的兩個統計量。</p>
+</div>
+
+<!-- 8 -->
+<h2 class="sec" id="t2spe">8. Hotelling T² 與 SPE / DModX</h2>
+
+<div class="card">
+<b>Hotelling's T²（模型內偏移）</b>
+<div class="formula">\[ T^{2}=\sum_{a=1}^{A}\frac{t_a^{2}}{\lambda_a}=\mathbf{t}^{\!\top}\boldsymbol{\Lambda}^{-1}\mathbf{t} \]</div>
+<div class="formula">\[ \text{界限：}\quad T^{2}_{\text{lim}}=\frac{A(N-1)(N+1)}{N(N-A)}\,F_{\alpha;\,A,\,N-A} \]</div>
+<p class="usage"><b>用法：</b>偵測落在正常相關結構<b>內</b>但幅度過大的偏移（製程整體飄移）。超過 \(T^2_{\text{lim}}\) 告警。</p>
+</div>
+
+<div class="card">
+<b>SPE / Q 統計量（≈ DModX，模型外殘差）</b>
+<div class="formula">\[ \mathrm{SPE}=\big\|\tilde{\mathbf{x}}-\hat{\tilde{\mathbf{x}}}\big\|^{2}=\sum_{j=1}^{p}\big(\tilde x_j-\hat{\tilde x}_j\big)^{2} \]</div>
+<div class="formula">\[ \mathrm{DModX}=\sqrt{\frac{\mathrm{SPE}}{p-A}}\;;\qquad \text{Q 界限（Jackson–Mudholkar）}\ \ Q_\alpha=\theta_1\!\left[\frac{c_\alpha\sqrt{2\theta_2 h_0^{2}}}{\theta_1}+1+\frac{\theta_2 h_0(h_0-1)}{\theta_1^{2}}\right]^{1/h_0} \]</div>
+<p class="usage"><b>用法：</b>偵測<b>打破正常相關結構</b>的新型故障（新異常模式）。\( \theta_i=\sum_{a>A}\lambda_a^{i} \)，
+\( h_0=1-\tfrac{2\theta_1\theta_3}{3\theta_2^{2}} \)。T² 與 SPE 互補，FD 兩者並行監控。</p>
+</div>
+
+<div class="card">
+<b>合併指標 / Combined Index \(\varphi\)</b>
+<div class="formula">\[ \varphi=\frac{\mathrm{SPE}}{Q_\alpha}+\frac{T^{2}}{T^{2}_{\text{lim}}} \]</div>
+<p class="usage"><b>用法：</b>把兩統計量合成單一可監控量，簡化告警判定與健康分數呈現。</p>
+</div>
+
+<!-- 9 -->
+<h2 class="sec" id="contrib">9. 貢獻度分析（Classification 連結）</h2>
+<div class="card">
+<b>SPE 貢獻度</b>
+<div class="formula">\[ \mathrm{cont}^{\mathrm{SPE}}_{j}=\big(\tilde x_j-\hat{\tilde x}_j\big)^{2} \]</div>
+<b>T² 貢獻度</b>
+<div class="formula">\[ \mathrm{cont}^{T^2}_{j}=\sum_{a=1}^{A}\frac{t_a}{\lambda_a}\,p_{ja}\,\tilde x_j \]</div>
+<p class="usage"><b>用法：</b>告警後計算每個感測器對 SPE / T² 的貢獻，貢獻最大者即嫌疑根因——這是
+FDC 中「C（分類）」與根因定位的核心，串接 OCAP 指向特定致動器／子系統。</p>
+</div>
+
+<!-- 10 -->
+<h2 class="sec" id="violation">10. 違規 / 告警邏輯與工作流程</h2>
+<ul>
+<li><b>單點越界：</b>\( I \notin [\mathrm{LCL},\mathrm{UCL}] \) 立即違規（最常用）。</li>
+<li><b>連串規則（Western Electric / Nelson）：</b>例如連續 \(m\) 點同側、連續上升／下降 \(m\) 點、
+\(2/3\) 點落在 \(2\sigma\) 外等——提升對未越界但異常型態的靈敏度。</li>
+<li><b>嚴重度分級：</b>常設 Warning（如 \(3\sigma\)）／Alarm（如 \(6\sigma\)）兩級界限。</li>
+<li><b>連續違規計數：</b>需連續 \(c\) 批違規才升級為設備停機，抑制偶發誤報。</li>
+<li><b>OCAP 串接：</b>違規 → 自動依失控行動計畫（保留批、通知、停機、觸發 R2R 修正）。</li>
+</ul>
+
+<!-- 11 -->
+<h2 class="sec" id="glossary">11. 名詞對照</h2>
+<table>
+<tr><th>縮寫</th><th>全名</th><th>中文</th></tr>
+<tr><td>FDC</td><td>Fault Detection &amp; Classification</td><td>故障偵測與分類</td></tr>
+<tr><td>FD</td><td>Fault Detection</td><td>故障偵測（本文重點）</td></tr>
+<tr><td>APC</td><td>Advanced Process Control</td><td>先進製程控制</td></tr>
+<tr><td>R2R</td><td>Run-to-Run</td><td>批間控制</td></tr>
+<tr><td>Trace</td><td>Sensor trace</td><td>感測器時間序列</td></tr>
+<tr><td>UCL/LCL</td><td>Upper/Lower Control Limit</td><td>上/下控制界限</td></tr>
+<tr><td>EWMA</td><td>Exp. Weighted Moving Average</td><td>指數加權移動平均</td></tr>
+<tr><td>SPE / Q</td><td>Squared Prediction Error</td><td>平方預測誤差（≈DModX）</td></tr>
+<tr><td>T²</td><td>Hotelling's T-squared</td><td>霍特林 T 平方</td></tr>
+<tr><td>OCAP</td><td>Out-of-Control Action Plan</td><td>失控行動計畫</td></tr>
+</table>
+
+<!-- 12 -->
+<h2 class="sec" id="sources">12. 參考來源</h2>
+<p>本文公式為統計學／多變量分析之標準教科書內容。背景與方法之公開佐證來源：</p>
+<ul>
+<li><a class="src" href="https://www.appliedmaterials.com/automation-software/e3-fault-detection-and-classification-fdc">Applied SmartFactory — E3 Fault Detection and Classification (FDC) 產品頁</a></li>
+<li><a class="src" href="https://appliedsmartfactory.com/semiconductor/process-quality-solutions/fault-detection/">Applied SmartFactory — Fault Detection 方案說明</a></li>
+<li><a class="src" href="https://appliedsmartfactory.com/semiconductor-blog/quality/spc-and-fdc-violations/">Applied SmartFactory — SPC &amp; FDC Violations / OCAP</a></li>
+<li><a class="src" href="https://averroes.ai/blog/fault-detection-classification-system-fdc-explained">FDC System Explained: Fault Detection &amp; Classification</a></li>
+<li><a class="src" href="http://www.gs68.de/data_analysis/fdc.html">Fault Detection and Classification (FDC) — 方法綜述</a></li>
+<li><a class="src" href="https://www.mdpi.com/2571-5577/9/4/83">An Overview of Modern Statistical Techniques in Semiconductor Manufacturing (MDPI)</a></li>
+<li><a class="src" href="https://patents.google.com/patent/US7477960B2/en">US7477960B2 — FDC using a run-to-run controller (Google Patents)</a></li>
+<li><a class="src" href="https://ieeexplore.ieee.org/document/9411890">Chamber/Recipe-Independent FDC Indicator (IEEE)</a></li>
+<li><a class="src" href="https://ieeexplore.ieee.org/document/6552755/">Application of PCA for efficient multivariate FDC (IEEE)</a></li>
+</ul>
+
+<div class="note">
+<b>適用聲明：</b>本文件為「E3 風格 FDC 故障偵測」之公開知識整理，可作為建立 Agent Skills 的數學／方法基礎；
+若需與貴司實際 E3 安裝之專有 CHM 完全逐項對齊，仍應以授權客戶可取得的官方 E3 說明檔為準。
+</div>
+
+<footer>
+產生日期：2026-05-19 ｜ 分支：claude/chm-to-word-converter-YZ2NF ｜
+內容範圍：單變量視窗指標、控制界限、管制圖、製程能力、PCA / T² / SPE-DModX、貢獻度分析、違規邏輯。
+公式以 MathJax 渲染（需網路載入 CDN）。
+</footer>
+</main>
+</div>
+</body>
+</html>
