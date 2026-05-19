@@ -1,0 +1,11 @@
+# chm2word / chm2skills — all dependencies are OPTIONAL; the tools auto-detect
+# whichever backends are present. Install only what you need.
+#
+# Recommended (highest fidelity, no Python deps):
+#   - 7-Zip / p7zip        : CHM extraction      (system package, not pip)
+#   - pandoc               : HTML -> docx / md   (system package, not pip)
+#
+# Pure-Python fallback backends (used when pandoc is absent):
+python-docx>=1.1.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
