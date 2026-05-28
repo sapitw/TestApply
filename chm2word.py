@@ -16,7 +16,9 @@ available, so you do not need every dependency installed:
     4. pychm     : Python `chm` package (libchm bindings)       (optional)
 
   DOCX backend (choose with --docx-backend):
-    - pandoc     : `pandoc` (highest fidelity: images, tables, formatting)
+    - word       : Microsoft Word via COM automation (Windows + pywin32)
+                   — highest fidelity, no pandoc needed
+    - pandoc     : `pandoc` (high fidelity: images, tables, formatting)
     - python     : pure-Python fallback (python-docx + beautifulsoup4 + lxml)
 
 Typical usage (Windows PowerShell / CMD):
@@ -331,12 +333,92 @@ def _rewrite_assets(body: str, page_dir: Path, root: Path) -> str:
 
 def to_docx(asm: Assembled, out_docx: Path, backend: str,
             add_toc: bool) -> None:
-    if backend in ("auto", "pandoc") and _which("pandoc"):
-        _docx_pandoc(asm, out_docx, add_toc)
+    if backend == "word":
+        _docx_word(asm, out_docx)
         return
     if backend == "pandoc":
-        raise RuntimeError("pandoc backend requested but pandoc not on PATH")
-    _docx_python(asm, out_docx)
+        if not _which("pandoc"):
+            raise RuntimeError("pandoc backend requested but pandoc not on PATH")
+        _docx_pandoc(asm, out_docx, add_toc)
+        return
+    if backend == "python":
+        _docx_python(asm, out_docx)
+        return
+    # auto: try Word (Windows) -> pandoc -> python, falling back on failure
+    errors: list[str] = []
+    if _word_available():
+        try:
+            _docx_word(asm, out_docx)
+            return
+        except Exception as e:
+            errors.append(f"word: {e}")
+    if _which("pandoc"):
+        try:
+            _docx_pandoc(asm, out_docx, add_toc)
+            return
+        except Exception as e:
+            errors.append(f"pandoc: {e}")
+    try:
+        _docx_python(asm, out_docx)
+        return
+    except Exception as e:
+        errors.append(f"python: {e}")
+    raise RuntimeError("all docx backends failed: " + "; ".join(errors))
+
+
+_word_app = None  # cached Word.Application instance for batch reuse
+
+
+def _word_available() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        import win32com.client  # type: ignore  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _get_word_app():
+    """Lazily start Word.Application once; reuse across the whole batch."""
+    global _word_app
+    if _word_app is not None:
+        return _word_app
+    try:
+        import win32com.client  # type: ignore
+    except Exception as e:
+        raise RuntimeError(
+            "word backend needs pywin32 on Windows: pip install pywin32 "
+            f"({e})")
+    app = win32com.client.DispatchEx("Word.Application")
+    app.Visible = False
+    app.DisplayAlerts = 0  # wdAlertsNone
+    import atexit
+
+    def _quit():
+        try:
+            app.Quit(SaveChanges=0)
+        except Exception:
+            pass
+    atexit.register(_quit)
+    _word_app = app
+    return app
+
+
+def _docx_word(asm: Assembled, out_docx: Path) -> None:
+    """Drive Microsoft Word via COM: open the assembled HTML, save as .docx.
+    Word natively renders the HTML (including images referenced via file://
+    URIs by `assemble()`), giving the highest fidelity on Windows."""
+    app = _get_word_app()
+    src = str(asm.html_path.resolve())
+    dst = str(out_docx.resolve())
+    doc = app.Documents.Open(src, ConfirmConversions=False, ReadOnly=False,
+                             AddToRecentFiles=False, Visible=False)
+    try:
+        doc.SaveAs2(dst, FileFormat=16)  # 16 = wdFormatDocumentDefault (.docx)
+    finally:
+        doc.Close(SaveChanges=0)
+    log.info("wrote %s (word COM)", out_docx.name)
 
 
 def _docx_pandoc(asm: Assembled, out_docx: Path, add_toc: bool) -> None:
@@ -487,9 +569,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="output directory for the .docx file(s)")
     p.add_argument("--backend", choices=["auto", "hh", "7z", "chmlib", "pychm"],
                    default="auto", help="CHM extraction backend (default auto)")
-    p.add_argument("--docx-backend", choices=["auto", "pandoc", "python"],
+    p.add_argument("--docx-backend",
+                   choices=["auto", "word", "pandoc", "python"],
                    default="auto",
-                   help="auto/pandoc (best) or python fallback (default auto)")
+                   help="auto picks Word(Windows)/pandoc/python in that order")
     p.add_argument("--no-toc", dest="toc", action="store_false",
                    help="ignore .hhc; just convert pages in file order")
     p.add_argument("--no-recurse", dest="recurse", action="store_false",

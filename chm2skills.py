@@ -322,8 +322,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--backend",
                    choices=["auto", "hh", "7z", "chmlib", "pychm"],
                    default="auto", help="CHM extraction backend (default auto)")
-    p.add_argument("--docx-backend", choices=["auto", "pandoc", "python"],
-                   default="auto", help="Word backend (default auto)")
+    p.add_argument("--docx-backend",
+                   choices=["auto", "word", "pandoc", "python"],
+                   default="auto",
+                   help="auto picks Word(Windows)/pandoc/python in that order")
     p.add_argument("--md-backend", choices=["auto", "pandoc", "python"],
                    default="auto", help="Markdown backend (default auto)")
     p.add_argument("--split-level", default="auto",

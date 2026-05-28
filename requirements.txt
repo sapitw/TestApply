@@ -5,7 +5,11 @@
 #   - 7-Zip / p7zip        : CHM extraction      (system package, not pip)
 #   - pandoc               : HTML -> docx / md   (system package, not pip)
 #
-# Pure-Python fallback backends (used when pandoc is absent):
+# Windows + Microsoft Word (best on Windows when pandoc is absent):
+#   pip install pywin32          # enables --docx-backend word (Word COM)
+#
+# Pure-Python fallback backends (used when neither Word nor pandoc available,
+# and for the Markdown reference files when pandoc is absent):
 python-docx>=1.1.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
